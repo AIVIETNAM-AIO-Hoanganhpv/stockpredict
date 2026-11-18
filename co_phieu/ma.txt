@@ -1,0 +1,12 @@
+# Danh sách mã phân tích tự động. Mỗi dòng một mã (hoặc nhiều mã cách nhau bởi dấu cách).
+# Cổ phiếu VN: 3 chữ cái (FPT) hoặc chỉ số (VNINDEX). Forex: EURUSD, XAUUSD (vàng).
+# Cổ phiếu quốc tế: AAPL, MSFT... Ghi rõ loại nếu cần: vn:ABC  fx:EURUSD  us:IBM
+
+# Chứng khoán Việt Nam
+VNINDEX FPT HPG VCB SSI
+
+# Forex & vàng
+EURUSD GBPUSD USDJPY XAUUSD
+
+# Cổ phiếu Mỹ
+AAPL
