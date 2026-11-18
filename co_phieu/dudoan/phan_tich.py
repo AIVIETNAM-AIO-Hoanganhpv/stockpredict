@@ -228,7 +228,7 @@ class KetQua:
 
     @property
     def nhan(self):
-        return NHAN[self.xu_huong]
+        return NHAN[self.xu_huong] if self.khung else "Không có dữ liệu"
 
     @property
     def chinh(self) -> KetQuaKhung:
@@ -236,7 +236,7 @@ class KetQua:
         for kq in self.khung:
             if kq.khung == ("D" if self.loai != "fx" else "4H"):
                 return kq
-        return self.khung[-1]
+        return self.khung[-1] if self.khung else None
 
 
 TRONG_SO_KHUNG = {"M": 1.0, "W": 1.5, "D": 2.0, "4H": 2.0, "1H": 1.5, "15m": 1.0}

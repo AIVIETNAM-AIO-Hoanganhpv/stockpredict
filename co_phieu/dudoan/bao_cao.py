@@ -26,6 +26,8 @@ def ten_file(ma: str) -> str:
 
 
 def ke_hoach(kq: KetQua) -> dict:
+    if not kq.khung:
+        return {}
     p = kq.chinh.fibo
     if not p or not kq.xu_huong or (p.up != (kq.xu_huong > 0)):
         return {}

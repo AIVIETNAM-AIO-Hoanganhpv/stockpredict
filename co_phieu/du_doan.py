@@ -75,7 +75,11 @@ def main(argv=None):
 
     ket_qua, du_lieu_ve, thu_lai = [], {}, {}
     for ma, df in jobs:
-        kq, df_chinh, tl = phan_tich_ma(ma, df, thu_lai=a.thu_lai or a.bao_cao)
+        try:
+            kq, df_chinh, tl = phan_tich_ma(ma, df, thu_lai=a.thu_lai or a.bao_cao)
+        except Exception as e:   # một mã lỗi không làm dừng cả danh sách
+            print(f"{ma}: lỗi – {e}\n")
+            continue
         ket_qua.append(kq)
         du_lieu_ve[kq.ma] = df_chinh
         thu_lai[kq.ma] = tl

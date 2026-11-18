@@ -108,6 +108,7 @@ def test_yahoo_symbol():
     assert du_lieu.yahoo_symbol("fx", "EURUSD") == "EURUSD=X"
     assert du_lieu.yahoo_symbol("fx", "XAUUSD") == "GC=F"
     assert du_lieu.yahoo_symbol("vn", "FPT") == "FPT.VN"
+    assert du_lieu.yahoo_symbol("vn", "VN30") == "E1VFVN30.VN"
 
 
 def test_doc_file_tieng_viet(tmp_path):

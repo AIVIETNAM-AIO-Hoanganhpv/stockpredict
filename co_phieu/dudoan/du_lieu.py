@@ -108,7 +108,7 @@ def doc_file(path) -> pd.DataFrame:
 def _yahoo(sym: str, khung: str) -> pd.DataFrame:
     import yfinance as yf
     cfg = {"15m": ("15m", "60d"), "1H": ("60m", "730d"), "4H": ("60m", "730d"),
-           "D": ("1d", "5y"), "W": ("1wk", "10y"), "M": ("1mo", "max")}[khung]
+           "D": ("1d", "10y"), "W": ("1wk", "10y"), "M": ("1mo", "max")}[khung]
     raw = yf.download(sym, interval=cfg[0], period=cfg[1], progress=False, auto_adjust=False,
                       threads=False)
     if raw is None or raw.empty:
@@ -116,13 +116,13 @@ def _yahoo(sym: str, khung: str) -> pd.DataFrame:
     df = _chuan_hoa(raw.reset_index())
     if khung == "4H":
         df = resample(df, "4H")
-    return df.iloc[-1500:]
+    return df if khung == "D" else df.iloc[-1500:]
 
 
 def _vnstock(ma: str, khung: str) -> pd.DataFrame:
     from vnstock import Vnstock  # thư viện tuỳ chọn: py -m pip install vnstock
     end = dt.date.today()
-    start = end - dt.timedelta(days={"D": 3 * 365, "W": 8 * 365, "M": 15 * 365}.get(khung, 365))
+    start = end - dt.timedelta(days=10 * 365)
     last_err = None
     for src in ("VCI", "TCBS"):
         try:
@@ -139,12 +139,25 @@ def yahoo_symbol(loai: str, ma: str) -> str:
     if loai == "fx":
         return YAHOO_DAC_BIET.get(ma, f"{ma}=X")
     if loai == "vn":
-        return {"VNINDEX": "^VNINDEX.VN"}.get(ma, f"{ma}.VN")
+        return {"VN30": "E1VFVN30.VN"}.get(ma, f"{ma}.VN")   # VN30 → quỹ ETF mô phỏng VN30
     return ma
 
 
+_CACHE: dict = {}
+
+
 def tai(ma: str, khung: str) -> pd.DataFrame:
-    """Tải dữ liệu cho một mã và một khung. Cổ phiếu VN: thử vnstock trước, rồi Yahoo."""
+    """Tải dữ liệu cho một mã và một khung. Cổ phiếu VN: thử vnstock trước, rồi Yahoo.
+    Khung W/M được dựng lại từ dữ liệu ngày để giá giữa các khung luôn khớp nhau."""
+    if khung in ("W", "M"):
+        return resample(tai(ma, "D"), khung)
+    key = (ma.upper(), khung)
+    if key not in _CACHE:
+        _CACHE[key] = _tai(ma, khung)
+    return _CACHE[key]
+
+
+def _tai(ma: str, khung: str) -> pd.DataFrame:
     loai, ma = phan_loai(ma)
     loi = []
     if loai == "vn" and khung in ("D", "W", "M"):
@@ -152,6 +165,8 @@ def tai(ma: str, khung: str) -> pd.DataFrame:
             return _vnstock(ma, khung)
         except Exception as e:
             loi.append(str(e))
+    if loai == "vn" and ma in CHI_SO_VN and ma != "VN30":
+        raise RuntimeError(f"Chỉ số {ma} cần thư viện vnstock (py -m pip install vnstock). " + " | ".join(loi))
     try:
         return _yahoo(yahoo_symbol(loai, ma), khung)
     except Exception as e:
