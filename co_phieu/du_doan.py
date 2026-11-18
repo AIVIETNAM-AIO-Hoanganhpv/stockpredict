@@ -39,6 +39,7 @@ def phan_tich_ma(ma: str, df_goc=None, thu_lai: bool = False):
         kq.ghi_chu.extend(loi)
     elif loi:
         kq.ghi_chu.append("Thiếu khung " + ", ".join(x.split(":")[0] for x in loi))
+    kq.frames = frames
     df_chinh = frames.get(kq.chinh.khung) if kq.khung else None
     tl = None
     if thu_lai and df_chinh is not None and len(df_chinh) > 120:

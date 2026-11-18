@@ -4,6 +4,7 @@ vnstock (cổ phiếu VN, nếu đã cài) hoặc file CSV/Excel tự tải.
 Kết quả luôn là DataFrame cột open, high, low, close, volume; index là thời gian.
 """
 import datetime as dt
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -144,6 +145,7 @@ def yahoo_symbol(loai: str, ma: str) -> str:
 
 
 _CACHE: dict = {}
+HAN_CACHE = 300          # giây: dữ liệu tải về được dùng lại trong 5 phút
 
 
 def tai(ma: str, khung: str) -> pd.DataFrame:
@@ -152,9 +154,10 @@ def tai(ma: str, khung: str) -> pd.DataFrame:
     if khung in ("W", "M"):
         return resample(tai(ma, "D"), khung)
     key = (ma.upper(), khung)
-    if key not in _CACHE:
-        _CACHE[key] = _tai(ma, khung)
-    return _CACHE[key]
+    now = time.monotonic()
+    if key not in _CACHE or now - _CACHE[key][0] > HAN_CACHE:
+        _CACHE[key] = (now, _tai(ma, khung))
+    return _CACHE[key][1]
 
 
 def _tai(ma: str, khung: str) -> pd.DataFrame:

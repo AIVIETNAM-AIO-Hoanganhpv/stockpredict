@@ -1,0 +1,316 @@
+// Dự đoán xu hướng – Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1
+// Bản backtest cho TradingView, cùng cách chấm điểm với công cụ Python (thư mục co_phieu/).
+//
+// Cách dùng: TradingView → Pine Editor → dán toàn bộ file → "Add to chart"
+//            → xem kết quả ở tab "Strategy Tester" (tổng lãi/lỗ, tỉ lệ thắng, sụt giảm tối đa…).
+// Lưu ý: chỉ là công cụ hỗ trợ phân tích, không phải lời khuyên đầu tư.
+
+//@version=6
+strategy("Dự đoán xu hướng (Stoch MACD MFI ADX ICT SMC Fibo)", shorttitle="DuDoanXH", overlay=true, initial_capital=100000000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.15, slippage=1, pyramiding=0, max_labels_count=500)
+
+// ───────────────────────────── Cài đặt ─────────────────────────────
+grpS = "Tín hiệu"
+nguong   = input.float(20.0, "Ngưỡng điểm (Tăng > +ngưỡng, Giảm < -ngưỡng)", minval=0, maxval=100, group=grpS)
+huong    = input.string("Cả Mua và Bán", "Chiều lệnh", options=["Cả Mua và Bán", "Chỉ Mua", "Chỉ Bán"], group=grpS)
+dungHtf  = input.bool(true, "Kết hợp khung lớn hơn", group=grpS)
+htfNhap  = input.timeframe("", "Khung lớn (để trống = tự chọn)", group=grpS)
+wHtf     = input.float(0.75, "Trọng số khung lớn (so với khung chart = 1)", minval=0, maxval=3, step=0.25, group=grpS)
+kPivot   = input.int(3, "Số nến xác nhận đỉnh/đáy", minval=1, maxval=10, group=grpS)
+
+grpR = "Cắt lỗ / chốt lời"
+dungFibo = input.bool(true, "Cắt lỗ / chốt lời theo Fibonacci", group=grpR)
+atrSl    = input.float(2.0, "Cắt lỗ dự phòng (x ATR)", minval=0.5, step=0.5, group=grpR)
+atrTp    = input.float(3.0, "Chốt lời dự phòng (x ATR)", minval=0.5, step=0.5, group=grpR)
+thoatNgang = input.bool(false, "Thoát lệnh khi điểm về vùng Đi ngang", group=grpR)
+tuNgay   = input.time(timestamp(2018, 1, 1, 0, 0), "Backtest từ ngày", group=grpR)
+
+grpH = "Hiển thị"
+hienBang = input.bool(true, "Hiện bảng điểm", group=grpH)
+hienNen  = input.bool(true, "Tô nền theo xu hướng", group=grpH)
+
+// ───────────────────────────── Hàm phụ ─────────────────────────────
+f_dau(x) => x > 0 ? 1.0 : x < 0 ? -1.0 : 0.0
+f_kep(x) => math.max(-1.0, math.min(1.0, x))
+f_trong(top, bot, a) => not na(top) and not na(bot) and close >= bot - 0.2 * a and close <= top + 0.2 * a
+
+// Mức Extension theo độ sâu hồi ("hồi ít thì lên nhiều"):
+// hồi ~21–38% → 1.618 · hồi ~50–62% → 1.272 · hồi ~76% → 1.0
+f_tiLe(sau) => sau < 0.441 ? 1.618 : sau < 0.691 ? 1.272 : 1.0
+
+f_htfTuDong() =>
+    s = timeframe.in_seconds()
+    s <= 900 ? "60" : s <= 3600 ? "240" : s <= 14400 ? "D" : s <= 86400 ? "W" : "M"
+
+// ───────────────────── Chấm điểm một khung thời gian ─────────────────────
+// Trả về: [điểm, các phiếu…, ADX, đỉnh/đáy gần nhất và nhịp trước để tính Fibonacci]
+f_diem() =>
+    a = ta.atr(14)
+
+    // Đỉnh / đáy (fractal)
+    ph = ta.pivothigh(high, kPivot, kPivot)
+    pl = ta.pivotlow(low, kPivot, kPivot)
+    var float h1 = na
+    var float h2 = na
+    var float l1 = na
+    var float l2 = na
+    var int h1Bar = na
+    var int l1Bar = na
+    var float dayTruocDinh = na
+    var float dinhTruocDay = na
+    if not na(ph)
+        h2 := h1
+        h1 := ph
+        h1Bar := bar_index - kPivot
+        dayTruocDinh := l1
+    if not na(pl)
+        l2 := l1
+        l1 := pl
+        l1Bar := bar_index - kPivot
+        dinhTruocDay := h1
+
+    // LEVEL 1 – xu hướng theo đỉnh/đáy
+    bangDinh = not na(h2) and math.abs(h1 - h2) <= 0.01 * math.max(h1, h2)
+    bangDay = not na(l2) and math.abs(l1 - l2) <= 0.01 * math.max(l1, l2)
+    vSw = na(h2) or na(l2) ? 0.0 : (bangDinh and bangDay) ? 0.0 : (h1 > h2 and l1 > l2) ? 1.0 : (h1 < h2 and l1 < l2) ? -1.0 : 0.0
+
+    // LEVEL 1 – vị thế giá so với MA20 (80%)
+    ma = ta.sma(close, 20)
+    tren = math.sum(close > ma ? 1.0 : 0.0, 20) / 20
+    vMa = tren >= 0.8 ? 1.0 : tren <= 0.2 ? -1.0 : 0.0
+
+    // MACD
+    [mLine, sLine, hist] = ta.macd(close, 12, 26, 9)
+    soCat = math.sum(ta.cross(mLine, sLine) ? 1.0 : 0.0, 20)
+    vMacd = soCat >= 4 ? 0.0 : f_dau(hist) * (math.abs(hist) > math.abs(hist[1]) ? 1.0 : 0.5)
+
+    // Heikin Ashi
+    haC = (open + high + low + close) / 4
+    float haO = na
+    haO := na(haO[1]) ? (open + close) / 2 : (haO[1] + haC[1]) / 2
+    haH = math.max(high, math.max(haO, haC))
+    haL = math.min(low, math.min(haO, haC))
+    xanh = haC > haO
+    khongRauDuoi = math.min(haO, haC) - haL <= 0.05 * a
+    khongRauTren = haH - math.max(haO, haC) <= 0.05 * a
+    xanh3 = xanh and xanh[1] and xanh[2]
+    do3 = not xanh and not xanh[1] and not xanh[2]
+    vHa = (xanh3 and khongRauDuoi and khongRauDuoi[1] and khongRauDuoi[2]) ? 1.0 : (do3 and khongRauTren and khongRauTren[1] and khongRauTren[2]) ? -1.0 : xanh3 ? 0.5 : do3 ? -0.5 : 0.0
+
+    // Stochastic
+    kS = ta.sma(ta.stoch(close, high, low, 14), 3)
+    dS = ta.sma(kS, 3)
+    vSt = (kS[1] <= dS[1] and kS > dS and kS < 50) ? 1.0 : (kS[1] >= dS[1] and kS < dS and kS > 50) ? -1.0 : kS > 80 ? -0.3 : kS < 20 ? 0.3 : 0.5 * f_dau(kS - dS)
+
+    // MFI (bỏ qua nếu không có khối lượng)
+    mf = ta.mfi(hlc3, 14)
+    coKL = math.sum(nz(volume), 30) > 0 and not na(mf)
+    vMf = mf > 80 ? -0.7 : mf < 20 ? 0.7 : f_kep(f_kep((mf - mf[3]) / 15) * 0.6 + (mf > 50 ? 0.4 : -0.4))
+    wMf = coKL ? 1.0 : 0.0
+
+    // ADX
+    [pdi, mdi, adx] = ta.dmi(14, 14)
+    vAdx = adx >= 25 ? f_dau(pdi - mdi) : 0.0
+    wAdx = adx >= 25 ? 1.0 : 0.5
+
+    // SMC – BOS / CHoCH, Order Block, Fair Value Gap
+    var float chuaPhaH = na
+    var float chuaPhaL = na
+    var int xuHuong = 0
+    var int suKienBar = na
+    var float obTangTop = na
+    var float obTangBot = na
+    var float obGiamTop = na
+    var float obGiamBot = na
+    var float fvTangTop = na
+    var float fvTangBot = na
+    var float fvGiamTop = na
+    var float fvGiamBot = na
+    if not na(ph)
+        chuaPhaH := ph
+    if not na(pl)
+        chuaPhaL := pl
+    phaLen = not na(chuaPhaH) and close > chuaPhaH
+    phaXuong = not phaLen and not na(chuaPhaL) and close < chuaPhaL
+    if phaLen
+        xuHuong := 1
+        suKienBar := bar_index
+        chuaPhaH := na
+        for i = 0 to 20
+            if close[i] < open[i]
+                obTangTop := high[i]
+                obTangBot := low[i]
+                break
+    if phaXuong
+        xuHuong := -1
+        suKienBar := bar_index
+        chuaPhaL := na
+        for i = 0 to 20
+            if close[i] > open[i]
+                obGiamTop := high[i]
+                obGiamBot := low[i]
+                break
+    if not na(obTangBot) and close < obTangBot
+        obTangTop := na
+        obTangBot := na
+    if not na(obGiamTop) and close > obGiamTop
+        obGiamTop := na
+        obGiamBot := na
+    if low > high[2]
+        fvTangTop := low
+        fvTangBot := high[2]
+    if high < low[2]
+        fvGiamTop := low[2]
+        fvGiamBot := high
+    if not na(fvTangBot) and low <= fvTangBot
+        fvTangTop := na
+        fvTangBot := na
+    if not na(fvGiamTop) and high >= fvGiamTop
+        fvGiamTop := na
+        fvGiamBot := na
+
+    tuoi = na(suKienBar) ? 9999 : bar_index - suKienBar
+    vSmc = float(xuHuong)
+    wSmc = xuHuong == 0 ? 0.0 : tuoi <= 10 ? 2.0 : 1.5
+    vung = (f_trong(obTangTop, obTangBot, a) ? 0.6 : 0.0) + (f_trong(fvTangTop, fvTangBot, a) ? 0.6 : 0.0) - (f_trong(obGiamTop, obGiamBot, a) ? 0.6 : 0.0) - (f_trong(fvGiamTop, fvGiamBot, a) ? 0.6 : 0.0)
+    vVung = f_kep(vung)
+    wVung = vung != 0 ? 1.0 : 0.0
+
+    // SMC – quét thanh khoản
+    quetDay = not na(l1) and low < l1 and close > l1
+    quetDinh = not na(h1) and high > h1 and close < h1
+    vQuet = quetDay ? 1.0 : quetDinh ? -1.0 : 0.0
+    wQuet = vQuet != 0 ? 1.0 : 0.0
+
+    // ICT – Premium/Discount và OTE (hồi 62–79%)
+    bias = xuHuong != 0 ? xuHuong : int(vSw)
+    bien = h1 - l1
+    sau = bien > 0 ? (bias > 0 ? (h1 - close) / bien : (close - l1) / bien) : na
+    trongOte = bias != 0 and not na(sau) and sau >= 0.62 and sau <= 0.79
+    giua = (h1 + l1) / 2
+    vIct = trongOte ? float(bias) : (bien > 0 and bias > 0 and close > giua) ? -0.3 : (bien > 0 and bias < 0 and close < giua) ? 0.3 : 0.0
+    wIct = trongOte ? 1.0 : vIct != 0 ? 0.5 : 0.0
+
+    tongW = 2.0 + 1.0 + 1.5 + 0.5 + 1.0 + wMf + wAdx + wSmc + wVung + wQuet + wIct
+    tong = vSw * 2.0 + vMa * 1.0 + nz(vMacd) * 1.5 + vHa * 0.5 + nz(vSt) * 1.0 + nz(vMf) * wMf + vAdx * wAdx + vSmc * wSmc + vVung * wVung + vQuet * wQuet + vIct * wIct
+    diem = 100 * tong / tongW
+    diem := adx < 20 ? diem * 0.7 : diem
+    [diem, vSw, vMa, nz(vMacd), vHa, nz(vSt), wMf > 0 ? nz(vMf) : na, vAdx, vSmc, vVung, vQuet, vIct, adx, h1, l1, h1Bar, l1Bar, dayTruocDinh, dinhTruocDay, a]
+
+// Điểm khung lớn của nến ĐÃ ĐÓNG (không vẽ lại / không nhìn trước tương lai)
+f_diemTruoc() =>
+    [d, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19] = f_diem()
+    d[1]
+
+// ───────────────────────────── Tính toán ─────────────────────────────
+[diemChart, vSw, vMa, vMacd, vHa, vSt, vMf, vAdx, vSmc, vVung, vQuet, vIct, adxV, h1, l1, h1Bar, l1Bar, dayTruocDinh, dinhTruocDay, atrV] = f_diem()
+
+htf = htfNhap == "" ? f_htfTuDong() : htfNhap
+diemHtf = request.security(syminfo.tickerid, htf, f_diemTruoc(), lookahead=barmerge.lookahead_on)
+diem = dungHtf and not na(diemHtf) ? (diemChart + diemHtf * wHtf) / (1.0 + wHtf) : diemChart
+xh = diem > nguong ? 1 : diem < -nguong ? -1 : 0
+
+// Kế hoạch Fibonacci
+soNenSauDinh = na(h1Bar) ? 1 : math.max(1, math.min(4999, bar_index - h1Bar))
+soNenSauDay = na(l1Bar) ? 1 : math.max(1, math.min(4999, bar_index - l1Bar))
+diem3Mua = ta.lowest(low, soNenSauDinh)      // đáy hồi sau đỉnh gần nhất
+diem3Ban = ta.highest(high, soNenSauDay)     // đỉnh hồi sau đáy gần nhất
+
+bienMua = h1 - dayTruocDinh
+sauMua = bienMua > 0 ? math.max(0.0, math.min(1.0, (h1 - diem3Mua) / bienMua)) : na
+tpMuaFibo = diem3Mua + bienMua * f_tiLe(sauMua)
+slMuaFibo = diem3Mua - 0.3 * atrV
+
+bienBan = dinhTruocDay - l1
+sauBan = bienBan > 0 ? math.max(0.0, math.min(1.0, (diem3Ban - l1) / bienBan)) : na
+tpBanFibo = diem3Ban - bienBan * f_tiLe(sauBan)
+slBanFibo = diem3Ban + 0.3 * atrV
+
+// ───────────────────────────── Lệnh ─────────────────────────────
+trongKy = time >= tuNgay
+choMua = huong != "Chỉ Bán"
+choBan = huong != "Chỉ Mua"
+tinHieuMua = xh == 1 and xh[1] != 1
+tinHieuBan = xh == -1 and xh[1] != -1
+
+var float tp = na
+var float sl = na
+
+if trongKy and tinHieuMua
+    if choMua
+        fiboOk = dungFibo and not na(tpMuaFibo) and tpMuaFibo > close and slMuaFibo < close
+        tp := fiboOk ? tpMuaFibo : close + atrTp * atrV
+        sl := fiboOk ? slMuaFibo : close - atrSl * atrV
+        strategy.entry("Mua", strategy.long, comment="Mua " + str.tostring(diem, "#"))
+        strategy.exit("Thoát Mua", from_entry="Mua", limit=tp, stop=sl)
+    else
+        strategy.close("Bán", comment="Đổi chiều")
+
+if trongKy and tinHieuBan
+    if choBan
+        fiboOk = dungFibo and not na(tpBanFibo) and tpBanFibo < close and slBanFibo > close
+        tp := fiboOk ? tpBanFibo : close - atrTp * atrV
+        sl := fiboOk ? slBanFibo : close + atrSl * atrV
+        strategy.entry("Bán", strategy.short, comment="Bán " + str.tostring(diem, "#"))
+        strategy.exit("Thoát Bán", from_entry="Bán", limit=tp, stop=sl)
+    else
+        strategy.close("Mua", comment="Đổi chiều")
+
+if strategy.position_size > 0
+    strategy.exit("Thoát Mua", from_entry="Mua", limit=tp, stop=sl)
+    if thoatNgang and xh == 0
+        strategy.close("Mua", comment="Đi ngang")
+if strategy.position_size < 0
+    strategy.exit("Thoát Bán", from_entry="Bán", limit=tp, stop=sl)
+    if thoatNgang and xh == 0
+        strategy.close("Bán", comment="Đi ngang")
+
+// Cảnh báo (tạo Alert → chọn strategy này → "alert() function calls only")
+if tinHieuMua and choMua
+    alert(syminfo.ticker + ": tín hiệu TĂNG, điểm " + str.tostring(diem, "#"), alert.freq_once_per_bar_close)
+if tinHieuBan and choBan
+    alert(syminfo.ticker + ": tín hiệu GIẢM, điểm " + str.tostring(diem, "#"), alert.freq_once_per_bar_close)
+
+// ───────────────────────────── Vẽ ─────────────────────────────
+coLenh = strategy.position_size != 0
+plot(coLenh ? tp : na, "Chốt lời", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
+plot(coLenh ? sl : na, "Cắt lỗ", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
+plot(ta.sma(close, 20), "MA20", color=color.new(color.orange, 30))
+plotshape(trongKy and tinHieuMua, "Tín hiệu Tăng", shape.triangleup, location.belowbar, color.new(color.green, 0), size=size.small)
+plotshape(trongKy and tinHieuBan, "Tín hiệu Giảm", shape.triangledown, location.abovebar, color.new(color.red, 0), size=size.small)
+bgcolor(hienNen ? (xh == 1 ? color.new(color.green, 92) : xh == -1 ? color.new(color.red, 92) : na) : na)
+
+f_o(x) => na(x) ? "–" : (x > 0 ? "▲ " : x < 0 ? "▼ " : "■ ") + str.tostring(x, "#.##")
+
+var table bang = table.new(position.top_right, 2, 15, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 60))
+if hienBang and barstate.islast
+    mauXh = xh == 1 ? color.green : xh == -1 ? color.red : color.gray
+    table.cell(bang, 0, 0, "Dự đoán", text_color=color.white)
+    table.cell(bang, 1, 0, xh == 1 ? "TĂNG" : xh == -1 ? "GIẢM" : "ĐI NGANG", text_color=color.white, bgcolor=mauXh)
+    table.cell(bang, 0, 1, "Điểm tổng", text_color=color.white)
+    table.cell(bang, 1, 1, str.tostring(diem, "#.#"), text_color=color.white)
+    table.cell(bang, 0, 2, "Khung chart / " + htf, text_color=color.white)
+    table.cell(bang, 1, 2, str.tostring(diemChart, "#.#") + " / " + str.tostring(diemHtf, "#.#"), text_color=color.white)
+    table.cell(bang, 0, 3, "Đỉnh/đáy", text_color=color.white)
+    table.cell(bang, 1, 3, f_o(vSw), text_color=color.white)
+    table.cell(bang, 0, 4, "Giá / MA20", text_color=color.white)
+    table.cell(bang, 1, 4, f_o(vMa), text_color=color.white)
+    table.cell(bang, 0, 5, "MACD", text_color=color.white)
+    table.cell(bang, 1, 5, f_o(vMacd), text_color=color.white)
+    table.cell(bang, 0, 6, "Heikin Ashi", text_color=color.white)
+    table.cell(bang, 1, 6, f_o(vHa), text_color=color.white)
+    table.cell(bang, 0, 7, "Stochastic", text_color=color.white)
+    table.cell(bang, 1, 7, f_o(vSt), text_color=color.white)
+    table.cell(bang, 0, 8, "MFI", text_color=color.white)
+    table.cell(bang, 1, 8, f_o(vMf), text_color=color.white)
+    table.cell(bang, 0, 9, "ADX " + str.tostring(adxV, "#"), text_color=color.white)
+    table.cell(bang, 1, 9, f_o(vAdx), text_color=color.white)
+    table.cell(bang, 0, 10, "SMC cấu trúc", text_color=color.white)
+    table.cell(bang, 1, 10, f_o(vSmc), text_color=color.white)
+    table.cell(bang, 0, 11, "SMC OB/FVG", text_color=color.white)
+    table.cell(bang, 1, 11, f_o(vVung), text_color=color.white)
+    table.cell(bang, 0, 12, "Quét thanh khoản", text_color=color.white)
+    table.cell(bang, 1, 12, f_o(vQuet), text_color=color.white)
+    table.cell(bang, 0, 13, "ICT OTE/Premium", text_color=color.white)
+    table.cell(bang, 1, 13, f_o(vIct), text_color=color.white)
+    table.cell(bang, 0, 14, "Chốt lời / Cắt lỗ", text_color=color.white)
+    table.cell(bang, 1, 14, coLenh ? str.tostring(tp, format.mintick) + " / " + str.tostring(sl, format.mintick) : "–", text_color=color.white)

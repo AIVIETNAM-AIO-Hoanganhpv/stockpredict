@@ -42,6 +42,32 @@ py du_doan.py --file gia.csv --ten ABC     # dùng file giá tự tải (CSV/Exc
 
 Giá Yahoo trễ khoảng 15 phút với cổ phiếu và vài phút với forex.
 
+## Web app trên điện thoại
+`web_app.py` là web app có 2 tab:
+- **Tra cứu**: gõ mã bất kỳ để phân tích ngay, có biểu đồ vuốt và phóng to được.
+- **Danh sách theo dõi**: các mã trong `ma.txt`, tự làm mới mỗi giờ.
+
+**Cách 1 – chạy trên máy tính, xem bằng điện thoại cùng Wi-Fi:**
+1. Bấm đúp `run_web.bat`.
+2. Trên điện thoại, mở địa chỉ *Network URL* hiện trong cửa sổ đen (dạng `http://192.168.x.x:8501`).
+
+**Cách 2 – đưa lên mạng miễn phí (Streamlit Community Cloud), mở được ở bất cứ đâu:**
+1. Vào https://share.streamlit.io và đăng nhập bằng tài khoản GitHub.
+2. Bấm **Create app**, chọn **Deploy a public app from GitHub**, rồi điền:
+   - Repository: `AIVIETNAM-AIO-Hoanganhpv/draft`
+   - Branch: `claude/quirky-bell-oi3coh`
+   - Main file path: `co_phieu/web_app.py`
+3. Mở **Advanced settings** và chọn Python **3.12**.
+4. Bấm **Deploy**. Đợi vài phút là có đường link dạng `https://....streamlit.app`.
+5. Mở link trên điện thoại. Nếu muốn có biểu tượng trên màn hình chính: trên iPhone bấm *Chia sẻ → Thêm vào MH chính*, trên Android bấm *⋮ → Thêm vào màn hình chính*.
+
+Mẹo:
+- Nếu repo để Private, trong phần **Settings → Sharing** của app có thể chỉ cho phép một số email được xem.
+- App miễn phí sẽ "ngủ" nếu vài ngày không ai mở. Khi đó chỉ cần bấm nút đánh thức trên trang.
+
+## Backtest trên TradingView
+Xem `tradingview/HUONG_DAN.md`. Bạn dán file `tradingview/du_doan_xu_huong.pine` vào Pine Editor, rồi xem kết quả ở tab Strategy Tester.
+
 ## Tự động trên GitHub
 Tệp `.github/workflows/du_doan_co_phieu.yml` cho GitHub tự chạy **mỗi giờ, từ thứ 2 đến thứ 6**. Mỗi lần chạy, GitHub phân tích các
 mã trong `ma.txt` rồi lưu báo cáo vào thư mục `co_phieu/bao_cao/`. Muốn đổi danh sách mã thì sửa `ma.txt`.
@@ -50,6 +76,8 @@ Xem bảng tóm tắt tại `co_phieu/bao_cao/README.md`. Muốn xem biểu đ�
 ## Cấu trúc
 ```
 du_doan.py           chạy bằng lệnh
+web_app.py           web app (Streamlit) cho điện thoại; run_web.bat để chạy trên máy
+tradingview/         bản Pine Script để backtest trên TradingView
 ma.txt               danh sách mã chạy tự động
 dudoan/chi_bao.py    MA, MACD, Stoch, MFI, ADX, ATR, Heikin Ashi
 dudoan/cau_truc.py   đỉnh/đáy, SMC (BOS/CHoCH/OB/FVG/thanh khoản), ICT (killzone), đếm nhịp

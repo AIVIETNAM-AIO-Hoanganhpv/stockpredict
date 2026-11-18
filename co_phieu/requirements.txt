@@ -3,4 +3,5 @@ numpy>=1.26
 yfinance>=0.2.50
 plotly>=5.20
 openpyxl>=3.1
+streamlit>=1.50
 # Tuỳ chọn – dữ liệu cổ phiếu VN tốt hơn (nếu cài được): py -m pip install vnstock

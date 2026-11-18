@@ -18,6 +18,8 @@ CANH_BAO = ("Công cụ chỉ hỗ trợ phân tích kỹ thuật, không phải
 def _f(x):
     if x is None or x != x:
         return "–"
+    if abs(x) >= 1000:
+        return f"{x:,.0f}"
     return f"{x:,.2f}" if abs(x) >= 10 else f"{x:,.5f}".rstrip("0").rstrip(".")
 
 
@@ -121,6 +123,8 @@ def bieu_do(df: pd.DataFrame, kq_khung, ten: str):
 CSS = """
 body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f8fafc;color:#0f172a}
 main{max-width:1200px;margin:auto;padding:24px}
+.cuon{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media (max-width:640px){main{padding:12px}h1{font-size:22px}th,td{padding:6px;font-size:13px}}
 h1{margin:0 0 4px} .muted{color:#64748b;font-size:13px}
 table{border-collapse:collapse;width:100%;background:#fff;margin:12px 0;font-size:14px}
 th,td{padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}
@@ -159,7 +163,7 @@ def html_ma(kq: KetQua, df_chinh: pd.DataFrame | None, thoi_gian: str, thu_lai: 
                     f"{thu_lai['toi']} nến = <b>{thu_lai['ti_le']:.0%}</b></div>")
     for g in kq.ghi_chu:
         body.append(f"<div class='card'>⚠ {html.escape(g)}</div>")
-    body.append("<table><tr><th>Khung</th><th>Xu hướng</th><th>Điểm</th><th>Giá</th>"
+    body.append("<div class='cuon'><table><tr><th>Khung</th><th>Xu hướng</th><th>Điểm</th><th>Giá</th>"
                 "<th>Chi tiết</th></tr>")
     for k in kq.khung:
         det = "<br>".join(f"{MUI_TEN[(v.gia_tri > 0) - (v.gia_tri < 0)]} <b>{html.escape(v.ten)}</b>: "
@@ -167,7 +171,7 @@ def html_ma(kq: KetQua, df_chinh: pd.DataFrame | None, thoi_gian: str, thu_lai: 
         det += "".join(f"<br>• <i>{html.escape(g)}</i>" for g in k.ghi_chu)
         body.append(f"<tr><td>{k.khung}</td><td>{_tag(k.xu_huong, k.nhan)}</td>"
                     f"<td>{k.diem:+.1f}</td><td>{_f(k.gia)}</td><td>{det}</td></tr>")
-    body.append("</table>")
+    body.append("</table></div>")
     if df_chinh is not None and len(df_chinh) > 30:
         fig = bieu_do(df_chinh, kq.chinh, kq.ma)
         body.append(fig.to_html(full_html=False, include_plotlyjs="cdn"))
@@ -186,8 +190,8 @@ def html_index(ds: list[KetQua], thoi_gian: str) -> str:
                     f"<td>{_f(kh.get('sl'))}</td><td>{_f(kh.get('tp1'))}</td></tr>")
     body = (f"<h1>Dự đoán xu hướng</h1><p class='muted'>Cập nhật {thoi_gian}. "
             "Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1</p>"
-            "<table><tr><th>Mã</th><th>Dự đoán</th><th>Điểm</th><th>Các khung</th><th>Giá</th>"
-            "<th>Cắt lỗ</th><th>Chốt lời</th></tr>" + "".join(rows) + "</table>")
+            "<div class='cuon'><table><tr><th>Mã</th><th>Dự đoán</th><th>Điểm</th><th>Các khung</th><th>Giá</th>"
+            "<th>Cắt lỗ</th><th>Chốt lời</th></tr>" + "".join(rows) + "</table></div>")
     return _trang("Dự đoán xu hướng", body)
 
 

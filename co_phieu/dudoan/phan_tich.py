@@ -225,6 +225,7 @@ class KetQua:
     xu_huong: int
     dong_thuan: str
     ghi_chu: list = field(default_factory=list)
+    frames: dict = field(default_factory=dict, repr=False)   # {khung: DataFrame} để vẽ biểu đồ
 
     @property
     def nhan(self):
