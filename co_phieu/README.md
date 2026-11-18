@@ -35,17 +35,46 @@ py du_doan.py --file gia.csv --ten ABC     # dùng file giá tự tải (CSV/Exc
 ```
 
 ## Mã được hỗ trợ
-- **Cổ phiếu VN**: `FPT`, `HPG`, `VNINDEX`… Công cụ dùng `vnstock` nếu máy đã cài được, nếu không thì lấy từ Yahoo (`FPT.VN`).
+- **Cổ phiếu VN**: `FPT`, `HPG`, `VNINDEX`… Công cụ lấy giá từ Vietcap. Nếu không lấy được thì dùng vnstock, sau đó đến Yahoo (`FPT.VN`).
 - **Forex, vàng**: `EURUSD`, `GBPUSD`, `USDJPY`, `XAUUSD` (vàng, lấy theo hợp đồng tương lai GC=F).
 - **Cổ phiếu quốc tế**: `AAPL`, `MSFT`… Nếu công cụ đoán sai loại mã, ghi rõ tiền tố: `vn:ABC`, `fx:EURUSD`, `us:IBM`.
 - **File tự tải**: cần các cột Ngày, Mở, Cao, Thấp, Đóng, KL (tên tiếng Anh cũng được).
 
 Giá Yahoo trễ khoảng 15 phút với cổ phiếu và vài phút với forex.
 
+## Khuyến nghị mua toàn thị trường (HOSE, HNX, UPCoM)
+```
+py du_doan.py --quet-thi-truong              # quét ~1.500 mã (3–7 phút) → bao_cao/khuyen_nghi.xlsx, khuyen_nghi.md
+py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
+```
+- **Nguồn giá**: Vietcap (giá đã điều chỉnh cổ tức). Công cụ bỏ qua mã có giá trị giao dịch thấp hơn `--gtgd` tỷ đồng mỗi phiên (mặc định 1 tỷ).
+- **Vùng mua đẹp** là nơi nhiều mức hỗ trợ trùng nhau (hợp lưu): Fibonacci hồi 0.5 / 0.618 / 0.705 (OTE) / 0.786,
+  Order Block, FVG, MA20/MA50, đáy gần nhất.
+  - Giá đang nằm trong vùng: có thể mua ngay.
+  - Giá cao hơn vùng: đặt lệnh chờ ở giữa vùng, không mua đuổi.
+- **Cắt lỗ**: dưới vùng mua 0,5 ATR. **Chốt lời**: theo Fibonacci mở rộng ("hồi ít thì lên nhiều").
+  Các giá đều được làm tròn theo bước giá của sàn.
+- **Khuyến nghị**:
+  - **Mua mạnh**: xu hướng tăng mạnh, giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 2.
+  - **Mua**: giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 1,5.
+  - **Chờ về vùng mua**: xu hướng tăng nhưng giá đã chạy xa vùng mua.
+  - **Theo dõi**: đi ngang, hoặc tỷ lệ lãi/lỗ thấp.
+  - **Không mua**: xu hướng giảm.
+- **Tầm giữ**:
+  - Ngắn hạn: khung ngày, giữ 1–3 tháng, có xét thêm khung tuần.
+  - Trung hạn: khung tuần, giữ 3–9 tháng, có xét thêm khung tháng.
+- **Tính lãi**: nhập số vốn → số cổ phiếu (lô 100), tiền và % lãi khi chạm chốt lời, tiền lỗ khi chạm cắt lỗ.
+  Đã trừ phí mua 0,15%, phí bán 0,15% và thuế bán 0,1%.
+
 ## Web app trên điện thoại
-`web_app.py` là web app có 2 tab:
-- **Tra cứu**: gõ mã bất kỳ để phân tích ngay, có biểu đồ vuốt và phóng to được.
-- **Danh sách theo dõi**: các mã trong `ma.txt`, tự làm mới mỗi giờ.
+`web_app.py` là web app có 4 tab:
+- **Khuyến nghị**: bảng xếp hạng toàn thị trường. Có thể lọc theo sàn, mức khuyến nghị và thanh khoản, nhập số vốn để tính lãi/lỗ.
+- **Tra cứu**: gõ mã bất kỳ để xem khuyến nghị, vùng mua và máy tính lãi/lỗ, có biểu đồ vuốt và phóng to được.
+- **Danh mục**: nhập mã, giá mua và số lượng. App tính lãi/lỗ hiện tại (sau phí, thuế) và gợi ý Giữ / Chốt lời / Cắt lỗ,
+  kèm mức cắt lỗ động.
+- **Theo dõi**: các mã trong `ma.txt`, tự làm mới mỗi giờ.
+
+Ở mục "⚙ Cài đặt chung" có thể chọn tầm giữ (ngắn hạn/trung hạn) và số vốn mỗi lệnh.
 
 **Cách 1 – chạy trên máy tính, xem bằng điện thoại cùng Wi-Fi:**
 1. Bấm đúp `run_web.bat`.
@@ -85,5 +114,8 @@ dudoan/fibo.py       Fibonacci hồi / mở rộng, chọn điểm chốt lời
 dudoan/phan_tich.py  chấm điểm từng khung, gộp đa khung, thử lại quá khứ
 dudoan/du_lieu.py    tải dữ liệu (Yahoo, vnstock, CSV/Excel)
 dudoan/bao_cao.py    báo cáo HTML + biểu đồ, Markdown, Excel
+dudoan/khuyen_nghi.py vùng mua đẹp, khuyến nghị, tính lãi/lỗ, đánh giá danh mục
+dudoan/quet.py       quét toàn thị trường VN, xếp hạng
+du_lieu_ma/ma_vn.csv danh sách mã HOSE/HNX/UPCoM (tự cập nhật)
 tests/               kiểm tra bằng dữ liệu giả lập
 ```

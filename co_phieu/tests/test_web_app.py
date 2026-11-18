@@ -29,16 +29,20 @@ def gia_gia(monkeypatch):
     du_lieu._CACHE.clear()
 
 
+def nut(at, nhan):
+    return next(b for b in at.button if nhan in b.label)
+
+
 def test_tra_cuu_va_danh_sach(gia_gia):
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
     assert not at.exception, at.exception
     md = " ".join(m.value for m in at.markdown)
     assert "FPT" in md and ("Tăng" in md or "Giảm" in md or "Đi ngang" in md)
-    assert len(at.tabs) == 2
-    assert len(at.dataframe) == 1                       # bảng danh sách theo dõi
+    assert len(at.tabs) == 4
+    assert len(at.dataframe) >= 2                       # danh mục + danh sách theo dõi
 
     at.text_input[0].set_value("EURUSD")
-    at.button[0].click().run()                            # nút "Phân tích" của form
+    nut(at, "Phân tích").click().run()
     assert not at.exception, at.exception
     assert any("EURUSD" in m.value for m in at.markdown)
 
@@ -46,6 +50,22 @@ def test_tra_cuu_va_danh_sach(gia_gia):
 def test_ma_loi_khong_lam_hong_app(gia_gia):
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
     at.text_input[0].set_value("LOI")
-    at.button[0].click().run()
+    nut(at, "Phân tích").click().run()
     assert not at.exception, at.exception
     assert any("Không có dữ liệu" in m.value for m in at.markdown)
+
+
+
+def test_quet_thi_truong_tren_web(gia_gia, monkeypatch):
+    ds = pd.DataFrame({"ma": ["AAA", "BBB"], "san": ["HSX", "HNX"], "ten": ["A", "B"]})
+    monkeypatch.setattr(du_lieu, "danh_sach_ma_vn", lambda san=None, lam_moi=False: ds[ds.san.isin(san)])
+
+    def fake_vci(ma, khung="D", so_nen=1300):
+        df = gia_gia_lap(1.0 if ma == "AAA" else -0.3, n=900)
+        df.index = pd.date_range(end=pd.Timestamp.now().normalize(), periods=len(df))
+        return df * [250, 250, 250, 250, 1e4]
+    monkeypatch.setattr(du_lieu, "_vci", fake_vci)
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
+    nut(at, "Quét toàn thị trường").click().run()
+    assert not at.exception, at.exception
+    assert any("quét 2 mã" in c.value for c in at.caption)

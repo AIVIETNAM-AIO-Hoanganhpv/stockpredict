@@ -3,7 +3,9 @@
 Chạy trên máy:      py -m streamlit run web_app.py   (hoặc bấm run_web.bat)
 Đưa lên mạng:       Streamlit Community Cloud, file chính co_phieu/web_app.py
 """
+import json
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -12,7 +14,7 @@ import streamlit as st
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, du_lieu  # noqa: E402
+from dudoan import bao_cao, du_lieu, khuyen_nghi as K, quet  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -94,16 +96,146 @@ def chi_tiet(kq, tl, tab: str):
         st.plotly_chart(fig, width="stretch", config={"scrollZoom": True, "displaylogo": False})
 
 
-# ------------------------------------------------------------------------------------------
-st.markdown("## 📈 Dự đoán xu hướng")
+# ------------------------------------------------------------------------------------------ khuyến nghị
+TAM = {"Ngắn hạn – khung ngày (1–3 tháng)": "D", "Trung hạn – khung tuần (3–9 tháng)": "W"}
+FILE_TT = HERE / "bao_cao" / "thi_truong.json"
+FILE_DM = HERE / "danh_muc.csv"
+
+
+def tien(x):
+    return "–" if x is None or pd.isna(x) else f"{x:,.0f} đ"
+
+
+def the_khuyen_nghi(kn, von: float, lo: int = 100):
+    """Thẻ khuyến nghị + máy tính lãi/lỗ theo số vốn."""
+    mau = K.MAU_MUC.get(kn.muc, "#64748b")
+    st.markdown(
+        f"<div style='padding:12px 16px;border-radius:12px;border:2px solid {mau}'>"
+        f"<div style='font-size:13px;color:#64748b'>Khuyến nghị {'ngắn hạn (D)' if kn.tam == 'D' else 'trung hạn (W)'}</div>"
+        f"<div style='font-size:26px;font-weight:700;color:{mau}'>{kn.muc}</div>"
+        + (f"<div style='font-size:15px'>Vùng mua đẹp: <b>{kn.vung.thap:,.0f} – {kn.vung.cao:,.0f}</b></div>"
+           if kn.vung else "") + "</div>", unsafe_allow_html=True)
+    if kn.gia_mua:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Giá mua", _f(kn.gia_mua),
+                  f"{-kn.cach_vung_pct:+.1%} so với giá" if kn.cach_vung_pct else "mua ngay",
+                  delta_color="off")
+        c2.metric("Cắt lỗ", _f(kn.cat_lo), f"{kn.lo_pct:+.1%}" if kn.lo_pct is not None else None)
+        c3.metric("Chốt lời", _f(kn.chot_loi1), f"{kn.lai_pct:+.1%}" if kn.lai_pct is not None else None)
+        c4.metric("Lãi/Lỗ (R:R)", f"{kn.rr:.1f}" if kn.rr else "–")
+        lai = K.ke_hoach_von(kn, von, lo)
+        if lai.get("tp1") and lai["tp1"]["so_cp"] > 0:
+            rows = [("Chốt lời 1", kn.chot_loi1, lai["tp1"])]
+            if lai.get("tp2"):
+                rows.append(("Chốt lời 2", kn.chot_loi2, lai["tp2"]))
+            rows.append(("Cắt lỗ", kn.cat_lo, lai["sl"]))
+            st.markdown(f"**Với {von:,.0f} đ:** mua **{lai['tp1']['so_cp']:,} cổ phiếu** "
+                        f"giá {kn.gia_mua:,.0f} = {lai['tp1']['tien_mua']:,.0f} đ (đã gồm phí)")
+            st.dataframe(pd.DataFrame([{"Kịch bản": t, "Giá bán": f"{g:,.0f}", "Tiền lãi/lỗ": tien(x["lai"]),
+                                        "%": f"{x['pct']:+.1%}"} for t, g, x in rows]),
+                         hide_index=True, width="stretch")
+        elif lai.get("tp1"):
+            st.caption("Số vốn chưa đủ mua 1 lô (100 cổ phiếu).")
+    for dong in kn.ly_do:
+        st.caption("• " + dong)
+
+
+@st.cache_resource
+def kho_thi_truong():
+    """Kết quả quét dùng chung cho mọi người xem (lưu trong bộ nhớ máy chủ)."""
+    return {"luc": None, "ts": 0.0, "D": None, "W": None, "thong_ke": None}
+
+
+def doc_file_thi_truong(kho):
+    if kho["D"] is None and FILE_TT.exists():
+        data = json.loads(FILE_TT.read_text(encoding="utf-8"))
+        kho.update(luc=data["luc"] + " (bản lưu sẵn)", D=pd.DataFrame(data["D"]), W=pd.DataFrame(data["W"]),
+                   thong_ke=data["thong_ke"], ts=0.0)
+
+
+def quet_ngay(kho, san, gtgd_min):
+    thanh = st.progress(0.0, text="Đang quét…")
+    def tt(i, n, ma):
+        thanh.progress(i / n, text=f"Đang quét {i}/{n} mã ({ma})")
+    kq = quet.quet(san=tuple(san), gtgd_min=gtgd_min, tien_trinh=tt)
+    kho.update(luc=pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%H:%M %d/%m/%Y"), ts=time.time(),
+               D=quet.bang(kq, "D"), W=quet.bang(kq, "W"), thong_ke=quet.thong_ke(kq))
+    thanh.empty()
+
+
+def tinh_lai_bang(b: pd.DataFrame, von: float) -> pd.DataFrame:
+    b = b.copy()
+    out = [K.tinh_lai(von, r["Giá mua"], r["Chốt lời"]) if pd.notna(r["Giá mua"]) and pd.notna(r["Chốt lời"])
+           else None for _, r in b.iterrows()]
+    out_sl = [K.tinh_lai(von, r["Giá mua"], r["Cắt lỗ"]) if pd.notna(r["Giá mua"]) and pd.notna(r["Cắt lỗ"])
+              else None for _, r in b.iterrows()]
+    b["Số CP"] = [x["so_cp"] if x else None for x in out]
+    b["% lãi"] = [round(x["pct"] * 100, 1) if x and x["so_cp"] else None for x in out]
+    b["Tiền lãi"] = [round(x["lai"]) if x and x["so_cp"] else None for x in out]
+    b["Tiền lỗ"] = [round(x["lai"]) if x and x["so_cp"] else None for x in out_sl]
+    return b
+
+
+# ------------------------------------------------------------------------------------------ giao diện
+st.markdown("### 📈 Dự đoán xu hướng & khuyến nghị")
 st.caption("Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1")
 
-tab1, tab2 = st.tabs(["🔍 Tra cứu", "📋 Danh sách theo dõi"])
+with st.expander("⚙ Cài đặt chung", expanded=False):
+    tam_nhan = st.radio("Tầm nắm giữ", list(TAM), horizontal=True)
+    von = st.number_input("Số vốn cho mỗi lệnh (đồng)", min_value=1_000_000, value=100_000_000,
+                          step=10_000_000, format="%d")
+tam = TAM[tam_nhan]
+
+tab0, tab1, tab2, tab3 = st.tabs(["🏆 Khuyến nghị", "🔍 Tra cứu", "💼 Danh mục", "📋 Theo dõi"])
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
+
+with tab0:
+    kho = kho_thi_truong()
+    doc_file_thi_truong(kho)
+    c1, c2 = st.columns(2)
+    san = c1.multiselect("Sàn", ["HSX", "HNX", "UPCOM"], default=["HSX", "HNX", "UPCOM"],
+                         format_func=lambda x: du_lieu.SAN[x])
+    gtgd_ty = c2.number_input("GTGD tối thiểu (tỷ đồng/phiên)", min_value=0.0, value=1.0, step=0.5)
+    cu = time.time() - kho["ts"] > 3600
+    if st.button("🔄 Quét toàn thị trường" + (" (~3–5 phút)" if cu else ""), type="primary", width="stretch"):
+        quet_ngay(kho, san or ["HSX"], gtgd_ty * 1e9)
+    if kho[tam] is None:
+        st.info("Chưa có dữ liệu – bấm **Quét toàn thị trường**.")
+    else:
+        tk = kho["thong_ke"]
+        st.caption(f"Cập nhật {kho['luc']} · quét {tk['tong']} mã · phân tích {tk['phan_tich']} mã đủ thanh khoản "
+                   f"· {tk['tang']} tăng / {tk['giam']} giảm")
+        b = tinh_lai_bang(kho[tam], von)
+        b = b[b["Sàn"].isin([du_lieu.SAN[x] for x in san])] if san else b
+        b = b[b["GTGD (tỷ)"].fillna(0) >= gtgd_ty]
+        muc = st.multiselect("Lọc khuyến nghị", K.MUC[::-1], default=["Mua mạnh", "Mua", "Chờ về vùng mua"])
+        b = b[b["Khuyến nghị"].isin(muc)]
+        dem = b["Khuyến nghị"].value_counts()
+        cols = st.columns(3)
+        for col, m in zip(cols, ["Mua mạnh", "Mua", "Chờ về vùng mua"]):
+            col.metric(m, int(dem.get(m, 0)))
+        hien = b[["Mã", "Sàn", "Khuyến nghị", "Giá", "Vùng mua", "Giá mua", "Cắt lỗ", "Chốt lời", "R:R",
+                  "% lãi", "Tiền lãi", "Tiền lỗ", "Số CP", "GTGD (tỷ)"]]
+        def mau_muc(v):
+            return f"color:{K.MAU_MUC.get(v, '#000')};font-weight:600"
+        st.dataframe(hien.style.map(mau_muc, subset=["Khuyến nghị"]).format(
+            {"Giá": "{:,.0f}", "Giá mua": "{:,.0f}", "Cắt lỗ": "{:,.0f}", "Chốt lời": "{:,.0f}",
+             "Tiền lãi": "{:,.0f}", "Tiền lỗ": "{:,.0f}", "Số CP": "{:,.0f}", "R:R": "{:.1f}",
+             "% lãi": "{:+.1f}%", "GTGD (tỷ)": "{:,.1f}"}, na_rep="–"),
+            hide_index=True, width="stretch", height=420)
+        st.download_button("⬇ Tải bảng Excel/CSV", hien.to_csv(index=False).encode("utf-8-sig"),
+                           file_name=f"khuyen_nghi_{tam}.csv", mime="text/csv", width="stretch")
+        if not b.empty:
+            chon = st.selectbox("Xem chi tiết mã", b["Mã"].tolist(), key="chon_kn")
+            with st.spinner(f"Đang phân tích {chon}…"):
+                kq, _, _ = phan_tich(chon, False)
+            if kq.khung:
+                the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
+                chi_tiet(kq, None, "khuyen_nghi")
 
 with tab1:
     with st.form("tra_cuu"):
-        ma = st.text_input("Mã (VD: FPT, EURUSD, XAUUSD, AAPL)", value=st.session_state.get("ma", "FPT"))
+        ma = st.text_input("Mã (VD: FPT, VNINDEX, EURUSD, XAUUSD, AAPL)", value=st.session_state.get("ma", "FPT"))
         thu_lai = st.checkbox("Thử lại trên quá khứ (chậm hơn)", value=True)
         ok = st.form_submit_button("Phân tích", type="primary", width="stretch")
     if ok:
@@ -112,9 +244,60 @@ with tab1:
     if ma:
         with st.spinner(f"Đang phân tích {ma}…"):
             kq, _, tl = phan_tich(ma, thu_lai)
+        if kq.khung and kq.loai == "vn" and tam in kq.frames:
+            the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
+        elif kq.khung:
+            st.caption("Khuyến nghị mua & máy tính lãi/lỗ áp dụng cho cổ phiếu Việt Nam.")
         chi_tiet(kq, tl, "tra_cuu")
 
 with tab2:
+    st.caption("Nhập các mã đang nắm giữ. Khi chạy trên máy tính, danh mục được lưu vào danh_muc.csv; "
+               "trên web hãy tải file về để lưu.")
+    if "dm" not in st.session_state:
+        st.session_state["dm"] = (pd.read_csv(FILE_DM) if FILE_DM.exists() else
+                                  pd.DataFrame({"Mã": ["FPT"], "Giá mua": [50000.0], "Số lượng": [1000]}))
+    up = st.file_uploader("Mở file danh mục (.csv)", type="csv")
+    if up is not None:
+        st.session_state["dm"] = pd.read_csv(up)
+    dm = st.data_editor(st.session_state["dm"], num_rows="dynamic", width="stretch", key="dm_editor",
+                        column_config={"Giá mua": st.column_config.NumberColumn(format="%.0f"),
+                                       "Số lượng": st.column_config.NumberColumn(format="%d")})
+    c1, c2 = st.columns(2)
+    if c1.button("💾 Lưu", width="stretch"):
+        try:
+            dm.to_csv(FILE_DM, index=False)
+            st.success("Đã lưu danh_muc.csv")
+        except OSError:
+            st.warning("Không lưu được trên máy chủ – hãy dùng nút Tải về.")
+    c2.download_button("⬇ Tải về", dm.to_csv(index=False).encode("utf-8-sig"), "danh_muc.csv", "text/csv",
+                       width="stretch")
+    rows, tong_von, tong_lai = [], 0.0, 0.0
+    for _, r in dm.dropna(subset=["Mã"]).iterrows():
+        m = str(r["Mã"]).strip().upper()
+        if not m or pd.isna(r.get("Giá mua")) or pd.isna(r.get("Số lượng")):
+            continue
+        kq, _, _ = phan_tich(m, False)
+        kn = K.khuyen_nghi(kq, tam) if kq.khung and tam in kq.frames else None
+        v = K.danh_gia_vi_the(float(r["Giá mua"]), float(r["Số lượng"]), kq, kn)
+        if v["lai"] is not None:
+            tong_von += float(r["Giá mua"]) * float(r["Số lượng"])
+            tong_lai += v["lai"]
+        rows.append({"Mã": m, "Giá mua": r["Giá mua"], "Giá hiện tại": v["gia"], "Số lượng": r["Số lượng"],
+                     "Lãi/lỗ": v["lai"], "%": v["pct"] * 100 if v["pct"] is not None else None,
+                     "Gợi ý": v["goi_y"], "Cắt lỗ động": v["cat_lo"],
+                     "Chốt lời": kn.chot_loi1 if kn else None})
+    if rows:
+        c1, c2 = st.columns(2)
+        c1.metric("Tổng vốn", tien(tong_von))
+        c2.metric("Lãi/lỗ (sau phí, thuế)", tien(tong_lai), f"{tong_lai / tong_von:+.1%}" if tong_von else None)
+        def mau_lai(v):
+            return "" if v is None or pd.isna(v) else ("color:#16a34a" if v > 0 else "color:#dc2626")
+        st.dataframe(pd.DataFrame(rows).style.map(mau_lai, subset=["Lãi/lỗ", "%"]).format(
+            {"Giá mua": "{:,.0f}", "Giá hiện tại": "{:,.0f}", "Số lượng": "{:,.0f}", "Lãi/lỗ": "{:,.0f}",
+             "%": "{:+.1f}%", "Cắt lỗ động": "{:,.0f}", "Chốt lời": "{:,.0f}"}, na_rep="–"),
+            hide_index=True, width="stretch")
+
+with tab3:
     ds_txt = st.text_area("Danh sách mã (cách nhau bởi dấu cách hoặc xuống dòng)",
                           value=" ".join(mac_dinh), height=80)
     ds = tuple(x for x in ds_txt.replace(",", " ").split() if x)

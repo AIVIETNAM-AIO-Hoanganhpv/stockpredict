@@ -3,6 +3,7 @@ name: Dự đoán cổ phiếu & forex
 on:
   schedule:
     - cron: "7 * * * 1-5"      # phút 7 mỗi giờ, thứ 2 – thứ 6 (giờ UTC)
+    - cron: "17 9 * * 1-5"     # 16h17 giờ VN: quét toàn thị trường sau phiên
   workflow_dispatch:            # chạy tay: tab Actions → Run workflow
 
 permissions:
@@ -28,16 +29,19 @@ jobs:
       - name: Cài thư viện
         run: |
           pip install -r co_phieu/requirements.txt
-          pip install vnstock || echo "Không cài được vnstock – dùng Yahoo cho cổ phiếu VN"
 
       - name: Phân tích danh sách mã (co_phieu/ma.txt)
         run: python co_phieu/du_doan.py --tat-ca --bao-cao --gon
+
+      - name: Quét toàn thị trường VN (1 lần/ngày, sau 15h giờ VN)
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 9 * * 1-5'
+        run: python co_phieu/du_doan.py --quet-thi-truong
 
       - name: Lưu báo cáo vào repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add co_phieu/bao_cao
+          git add co_phieu/bao_cao co_phieu/du_lieu_ma
           if git diff --cached --quiet; then
             echo "Không có thay đổi"
           else

@@ -1,10 +1,16 @@
-"""Tải dữ liệu giá: Yahoo Finance (forex, cổ phiếu quốc tế, cổ phiếu VN đuôi .VN),
-vnstock (cổ phiếu VN, nếu đã cài) hoặc file CSV/Excel tự tải.
+"""Tải dữ liệu giá:
+  • Vietcap (trading.vietcap.com.vn) – cổ phiếu & chỉ số VN, toàn bộ HOSE/HNX/UPCoM (giá đã điều chỉnh)
+  • vnstock (nếu đã cài) – dự phòng cho cổ phiếu VN
+  • Yahoo Finance – forex, vàng, cổ phiếu quốc tế (và dự phòng cho cổ phiếu VN, đuôi .VN)
+  • file CSV/Excel tự tải.
 
 Kết quả luôn là DataFrame cột open, high, low, close, volume; index là thời gian.
 """
 import datetime as dt
+import gzip
+import json
 import time
+import urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -136,6 +142,64 @@ def _vnstock(ma: str, khung: str) -> pd.DataFrame:
     raise RuntimeError(f"vnstock lỗi: {last_err}")
 
 
+# ------------------------------------------------------------------------- Vietcap
+VCI_API = "https://trading.vietcap.com.vn/api/"
+VCI_KHUNG = {"D": "ONE_DAY", "1H": "ONE_HOUR", "15m": "ONE_MINUTE"}
+SAN = {"HSX": "HOSE", "HNX": "HNX", "UPCOM": "UPCoM"}
+FILE_MA = Path(__file__).resolve().parent.parent / "du_lieu_ma" / "ma_vn.csv"
+
+
+def _vci_goi(duong_dan: str, body: dict | None = None, timeout: int = 30):
+    req = urllib.request.Request(
+        VCI_API + duong_dan, data=json.dumps(body).encode() if body is not None else None,
+        method="POST" if body is not None else "GET",
+        headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0",
+                 "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+        if r.headers.get("Content-Encoding") == "gzip" or raw[:2] == b"\x1f\x8b":
+            raw = gzip.decompress(raw)
+    return json.loads(raw)
+
+
+def _vci(ma: str, khung: str = "D", so_nen: int = 1300) -> pd.DataFrame:
+    """Giá một mã từ Vietcap (mỗi lần gọi chỉ được 1 mã)."""
+    res = _vci_goi("chart/OHLCChart/gap-chart", {
+        "timeFrame": VCI_KHUNG[khung], "symbols": [ma],
+        "to": int(time.time()) + 86400, "countBack": so_nen})
+    if not res or not res[0].get("c"):
+        raise RuntimeError(f"Vietcap không có dữ liệu cho {ma}")
+    x = res[0]
+    df = pd.DataFrame({"open": x["o"], "high": x["h"], "low": x["l"], "close": x["c"],
+                       "volume": x["v"]},
+                      index=pd.to_datetime([int(t) for t in x["t"]], unit="s"))
+    if khung == "D":
+        df.index = df.index.normalize()
+    df = df.apply(pd.to_numeric, errors="coerce").dropna(subset=["close"]).sort_index()
+    return df[~df.index.duplicated(keep="last")]
+
+
+def danh_sach_ma_vn(san=("HSX", "HNX", "UPCOM"), lam_moi: bool = False) -> pd.DataFrame:
+    """Toàn bộ cổ phiếu đang niêm yết: cột ma, san, ten. Lưu sẵn vào du_lieu_ma/ma_vn.csv
+    để vẫn dùng được khi mất mạng."""
+    df = None
+    if lam_moi or not FILE_MA.exists():
+        try:
+            raw = _vci_goi("price/symbols/getAll")
+            df = pd.DataFrame([{"ma": x["symbol"], "san": x["board"],
+                                "ten": x.get("organShortName") or x.get("organName") or ""}
+                               for x in raw if x.get("type") == "STOCK"
+                               and x.get("board") in SAN and len(x.get("symbol", "")) == 3])
+            df = df.sort_values(["san", "ma"]).reset_index(drop=True)
+            FILE_MA.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(FILE_MA, index=False, encoding="utf-8")
+        except Exception:
+            df = None
+    if df is None:
+        df = pd.read_csv(FILE_MA, encoding="utf-8")
+    return df[df["san"].isin(san)].reset_index(drop=True)
+
+
 def yahoo_symbol(loai: str, ma: str) -> str:
     if loai == "fx":
         return YAHOO_DAC_BIET.get(ma, f"{ma}=X")
@@ -149,7 +213,7 @@ HAN_CACHE = 300          # giây: dữ liệu tải về được dùng lại tr
 
 
 def tai(ma: str, khung: str) -> pd.DataFrame:
-    """Tải dữ liệu cho một mã và một khung. Cổ phiếu VN: thử vnstock trước, rồi Yahoo.
+    """Tải dữ liệu cho một mã và một khung. Cổ phiếu VN: Vietcap → vnstock → Yahoo.
     Khung W/M được dựng lại từ dữ liệu ngày để giá giữa các khung luôn khớp nhau."""
     if khung in ("W", "M"):
         return resample(tai(ma, "D"), khung)
@@ -163,13 +227,18 @@ def tai(ma: str, khung: str) -> pd.DataFrame:
 def _tai(ma: str, khung: str) -> pd.DataFrame:
     loai, ma = phan_loai(ma)
     loi = []
-    if loai == "vn" and khung in ("D", "W", "M"):
+    if loai == "vn":
         try:
-            return _vnstock(ma, khung)
+            return _vci(ma, khung)
         except Exception as e:
-            loi.append(str(e))
-    if loai == "vn" and ma in CHI_SO_VN and ma != "VN30":
-        raise RuntimeError(f"Chỉ số {ma} cần thư viện vnstock (py -m pip install vnstock). " + " | ".join(loi))
+            loi.append(f"Vietcap: {e}")
+        if khung == "D":
+            try:
+                return _vnstock(ma, khung)
+            except Exception as e:
+                loi.append(f"vnstock: {e}")
+        if ma in CHI_SO_VN and ma != "VN30":
+            raise RuntimeError(f"Không tải được chỉ số {ma}: " + " | ".join(loi))
     try:
         return _yahoo(yahoo_symbol(loai, ma), khung)
     except Exception as e:
