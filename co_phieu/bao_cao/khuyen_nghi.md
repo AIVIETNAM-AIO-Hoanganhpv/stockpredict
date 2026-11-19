@@ -1,8 +1,13 @@
-# Khuyến nghị toàn thị trường – 19/11/2026 17:54
+# Khuyến nghị toàn thị trường – 20/11/2026 01:28
 
-Quét 1517 mã · phân tích 280 mã đủ thanh khoản · 30 mã xu hướng tăng, 105 mã giảm.
+Quét 1517 mã · phân tích 270 mã đủ thanh khoản · 23 mã xu hướng tăng, 105 mã giảm.
 
 ## Ngắn hạn – khung ngày (1–3 tháng)
+
+| Mã | Sàn | Khuyến nghị | Giá | Vùng mua | Cắt lỗ | Chốt lời | R:R | % lãi |
+|---|---|---|---:|---|---:|---:|---:|---:|
+
+## Trung hạn – khung tuần (3–9 tháng)
 
 | Mã | Sàn | Khuyến nghị | Giá | Vùng mua | Cắt lỗ | Chốt lời | R:R | % lãi |
 |---|---|---|---:|---|---:|---:|---:|---:|
@@ -41,7 +46,22 @@ Quét 1517 mã · phân tích 280 mã đủ thanh khoản · 30 mã xu hướng 
 | STB | Ngân hàng | Bán mạnh | 69,000 | 75,500 – 79,700 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung FVG giảm [69,900 – 76,500] · CHoCH giảm – cấu trúc tăng bị phá |
 | ASP | Tiện ích (điện, nước, khí) | Bán mạnh | 12,500 | 16,000 – 17,250 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung OB giảm [15,250 – 17,150] · CHoCH giảm – cấu trúc tăng bị phá |
 | SJD | Tiện ích (điện, nước, khí) | Bán mạnh | 11,900 | 12,300 – 12,550 | Chạm vùng cung OB giảm [12,267 – 12,710] · CHoCH giảm – cấu trúc tăng bị phá · Nến râu trên dài (nến búa ngược / sao băng) |
-| MSB | Ngân hàng | Chốt lời dần | 16,550 | 17,300 – 17,500 | Stoch quá mua (96) · MFI quá mua (86) – dòng tiền vào quá nóng · Đã chạy 3 nhịp tăng – hay đảo chiều ở nhịp 3–4 |
+
+## Nên bán ở đỉnh – khung tuần
+
+| Mã | Ngành | Tín hiệu | Giá | Vùng bán | Dấu hiệu |
+|---|---|---|---:|---|---|
+| TVS | Dịch vụ tài chính | Bán mạnh | 11,250 | 14,300 – 16,300 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Quét thanh khoản đỉnh cũ rồi đóng cửa quay xuống · Chạm vùng cung OB giảm [14,082 – 18,062] · CHoCH giảm – cấu trúc tăng bị phá |
+| KDH | Bất động sản | Bán mạnh | 15,800 | 17,850 – 18,900 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung FVG giảm [17,091 – 19,591] · CHoCH giảm – cấu trúc tăng bị phá |
+| LPB | Ngân hàng | Bán mạnh | 34,200 | 45,800 – 52,800 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung OB giảm [45,100 – 58,500] · CHoCH giảm – cấu trúc tăng bị phá |
+| REE | Tiện ích (điện, nước, khí) | Bán mạnh | 47,300 | 50,600 – 57,200 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung FVG giảm [50,400 – 52,200] · CHoCH giảm – cấu trúc tăng bị phá |
+| DPR | Hóa chất | Bán mạnh | 33,000 | 44,500 – 49,400 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung OB giảm [35,620 – 38,315] · CHoCH giảm – cấu trúc tăng bị phá |
+| NTP | Xây dựng & Vật liệu | Bán mạnh | 52,900 | 52,500 – 58,000 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung OB giảm [50,790 – 56,072] · CHoCH giảm – cấu trúc tăng bị phá |
+| ELC | Công nghệ thông tin | Bán mạnh | 9,850 | 11,500 – 13,650 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Chạm vùng cung FVG giảm [12,900 – 13,552] · CHoCH giảm – cấu trúc tăng bị phá |
+| AMS | Hàng & Dịch vụ công nghiệp | Bán mạnh | 9,600 | 12,200 – 13,900 | Quét thanh khoản đỉnh cũ rồi đóng cửa quay xuống · Chạm vùng cung OB giảm [11,550 – 13,227] · CHoCH giảm – cấu trúc tăng bị phá |
+| HID | Xây dựng & Vật liệu | Bán mạnh | 4,050 | 5,800 – 6,240 | Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · Quét thanh khoản đỉnh cũ rồi đóng cửa quay xuống · CHoCH giảm – cấu trúc tăng bị phá |
+| POS | Dầu khí | Bán mạnh | 13,200 | 14,700 – 15,400 | MFI quá mua (80) – dòng tiền vào quá nóng · Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn) · CHoCH giảm – cấu trúc tăng bị phá |
+| HDB | Ngân hàng | Chốt lời dần | 22,150 | 21,350 – 23,400 | Chạm Fibonacci mở rộng 1.272 (23,014) · Quét thanh khoản đỉnh cũ rồi đóng cửa quay xuống · Đã chạy 4 nhịp tăng – hay đảo chiều ở nhịp 3–4 |
 
 ## Sức mạnh ngành
 
@@ -49,15 +69,15 @@ Quét 1517 mã · phân tích 280 mã đủ thanh khoản · 30 mã xu hướng 
 |---:|---|---|---:|---:|---:|---:|
 | 1 | Du lịch & Giải trí | Mạnh | 75% | +8.2% | 0 | 1 |
 | 2 | Bán lẻ | Mạnh | 25% | -7.1% | 0 | 1 |
-| 3 | Ngân hàng | Mạnh | 17% | -3.3% | 0 | 2 |
-| 4 | Hàng cá nhân & Gia dụng | Mạnh | 14% | -6.1% | 0 | 0 |
-| 5 | Tiện ích (điện, nước, khí) | Mạnh | 6% | -3.0% | 0 | 5 |
-| 6 | Thực phẩm & Đồ uống | Mạnh | 4% | -2.7% | 0 | 1 |
-| 7 | Bất động sản | Mạnh | 10% | -4.2% | 0 | 2 |
-| 8 | Xây dựng & Vật liệu | Trung bình | 11% | -4.6% | 0 | 4 |
-| 9 | Tài nguyên cơ bản | Trung bình | 24% | -5.5% | 0 | 0 |
-| 10 | Hàng & Dịch vụ công nghiệp | Trung bình | 15% | -8.9% | 0 | 1 |
-| 11 | Dịch vụ tài chính | Trung bình | 4% | -3.6% | 0 | 0 |
+| 3 | Hàng cá nhân & Gia dụng | Mạnh | 14% | -6.1% | 0 | 0 |
+| 4 | Tiện ích (điện, nước, khí) | Mạnh | 6% | -3.0% | 0 | 5 |
+| 5 | Ngân hàng | Mạnh | 13% | -3.3% | 0 | 2 |
+| 6 | Thực phẩm & Đồ uống | Mạnh | 4% | -3.4% | 0 | 1 |
+| 7 | Bất động sản | Mạnh | 5% | -4.5% | 0 | 2 |
+| 8 | Xây dựng & Vật liệu | Trung bình | 6% | -5.0% | 0 | 4 |
+| 9 | Dịch vụ tài chính | Trung bình | 4% | -3.6% | 0 | 0 |
+| 10 | Tài nguyên cơ bản | Trung bình | 20% | -5.5% | 0 | 0 |
+| 11 | Hàng & Dịch vụ công nghiệp | Trung bình | 12% | -9.0% | 0 | 1 |
 | 12 | Y tế | Trung bình | 0% | -12.7% | 0 | 0 |
 | 13 | Hóa chất | Trung bình | 6% | -13.9% | 0 | 0 |
 | 14 | Ô tô & Phụ tùng | Yếu | 0% | -2.5% | 0 | 0 |
