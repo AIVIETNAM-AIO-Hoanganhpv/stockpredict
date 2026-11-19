@@ -197,5 +197,5 @@ KIEM_DINH = {
     "W": ("+6,5% (2000–2026), ngẫu nhiên −7%", False),
     "M": ("+11% (2001–2026), ngẫu nhiên +6% – ít lệnh", False),
 }
-KIEM_DINH_L1 = ("LEVEL 1 (MA10/MA20 khung ngày): +26%, sụt giảm −20%, ổn định 2 nửa giai đoạn – tốt nhất trong "
-                "các công thức forex đã thử nhưng chưa chắc chắn (thử 10 tổ hợp).")
+KIEM_DINH_L1 = ("Cặp MA5/MA10 theo slide CHƯA kiểm định; cặp MA10/MA20 khung ngày đã kiểm định: +26%, sụt giảm −20% – "
+                "tốt nhất trong các công thức forex đã thử nhưng chưa chắc chắn (thử 10 tổ hợp).")

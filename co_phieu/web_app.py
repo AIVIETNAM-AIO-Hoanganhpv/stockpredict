@@ -1114,11 +1114,11 @@ def the_forex(kq):
     if chay:
         st.error(f"⚠ Khung {ten.get(chon_k, chon_k)}: backtest {kd}. Không nên giao dịch theo khung này.")
     try:
-        l1 = L1.trang_thai(kq.frames["D"], "D", cap=(10, 20)) if "D" in kq.frames else None
+        l1 = L1.trang_thai(kq.frames["D"], "D", cap=(5, 10)) if "D" in kq.frames else None
     except Exception:
         l1 = None
     if l1:
-        st.info(f"📘 LEVEL 1 (MA10/MA20 khung ngày): **{l1['trang_thai']}**"
+        st.info(f"📘 Công thức 2 MA cho coin/forex (MA5/MA10 khung ngày): **{l1['trang_thai']}**"
                 + (f" · vào {so_fx(l1['vao'], FX.thong_so(kq.ma))}, cắt lỗ {so_fx(l1['cat_lo'], FX.thong_so(kq.ma))}"
                    if l1.get("co_lenh") else "") + f". {FX.KIEM_DINH_L1}")
     if not k.get("huong"):
@@ -1331,7 +1331,7 @@ def the_level1(kq, ck):
             {c: "{:,.0f}" for c in ("Giá vào", "Cắt lỗ", "CP lệnh vị thế", "Vào xác nhận", "Cắt lỗ xác nhận",
                                     "CP xác nhận")}, na_rep="–"), hide_index=True, width="stretch")
         st.caption(f"Tài khoản {trieu(tk_ck)} (đổi ở ⚙). Lệnh vị thế = 30%, lệnh xác nhận = 70% tiền chấp nhận cắt lỗ "
-                   "(D 5% · W 12% · M 12% tài khoản, chia 10 mã, nhân hệ số nhịp). Bán 50% khi nến đóng dưới MA điều kiện, "
+                   "(D 5% · W 12% · M 12% tài khoản, chia 10 mã, nhân hệ số nhịp). Bán 70% khi nến đóng dưới MA điều kiện (mới chạy 1 nhịp khung nhỏ → chỉ bán 30%), "
                    "bán hết khi MA tín hiệu cắt xuống. Kiểm định 2020–2026 (vốn 1 tỷ): D +4,0%, W +2,6%, M +5,2%/năm, "
                    "cả 3 khung +6,7%/năm – THẤP HƠN mua & giữ (+9,9%) và lọc pha thị trường (+16%).")
 

@@ -238,7 +238,7 @@ def thong_ke(ket_qua: list[KetQuaMa]) -> dict:
             "ban": sum(bool(r.dinh) and r.dinh["D"].hang >= 2 for r in co)}
 
 
-CO_HANH_DONG = ("MUA LỆNH VỊ THẾ", "MUA LỆNH XÁC NHẬN", "BÁN 50%", "BÁN HẾT", "ĐÃ CẮT LỖ")
+CO_HANH_DONG = ("MUA LỆNH VỊ THẾ", "MUA LỆNH XÁC NHẬN", "BÁN 70%", "BÁN 30%", "BÁN HẾT", "ĐÃ CẮT LỖ")
 
 
 def tin_hieu_level1(ket_qua: list[KetQuaMa], thi_truong_tot: bool, von: float = 1e9) -> list[dict]:

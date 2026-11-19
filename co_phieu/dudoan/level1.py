@@ -6,7 +6,9 @@
     Cắt lỗ: đáy thấp nhất của đoạn nến gần nhất có giá thấp < MA điều kiện.
   • Lệnh XÁC NHẬN: sau đó, nến tăng đóng cửa trên MA điều kiện khi lệnh vị thế đang có lãi.
     Cắt lỗ: nến gần nhất có đáy dưới MA điều kiện (cách MA ≥ 0,25 ATR).
-  • BÁN 50%: nến đóng cửa dưới MA điều kiện · BÁN HẾT: MA tín hiệu cắt xuống MA điều kiện · luôn tôn trọng cắt lỗ.
+  • BÁN 70%: nến đóng cửa dưới MA điều kiện (nếu từ lúc vào giá mới chạy 1 nhịp của khung nhỏ hơn → chỉ bán 30%)
+    · BÁN NỐT: MA tín hiệu cắt xuống MA điều kiện · luôn tôn trọng cắt lỗ. (Theo slide 'Công thức giao dịch theo 2 đường MA'.)
+  • Coin/forex dùng cặp MA5–MA10.
   • Đồng pha: D cần khung W tăng (MA10 > MA20 tuần) và thị trường chung tốt; W cần khung M tăng (cho phép thăm dò
     30% nếu đã có ≥ 2 nhịp giảm – công thức GĐ2); M không cần.
   • Quản trị vốn: tiền chấp nhận cắt lỗ cho 1 cơ hội = D 5% · W 12% · M 12% tài khoản, chia đều cho tối đa 10 mã,
@@ -47,7 +49,7 @@ def nen_khung(df: pd.DataFrame, khung: str) -> pd.DataFrame:
 
 def _chi_bao(b: pd.DataFrame) -> pd.DataFrame:
     c = b["close"]
-    for n in (6, 10, 20):
+    for n in (5, 6, 10, 20):
         b[f"ma{n}"] = c.rolling(n).mean()
     tr = pd.concat([b["high"] - b["low"], (b["high"] - c.shift()).abs(), (b["low"] - c.shift()).abs()], axis=1).max(axis=1)
     b["atr"] = tr.rolling(14).mean()
@@ -88,6 +90,24 @@ def _nhip(duoi: np.ndarray, low: np.ndarray, den: int) -> tuple[int, int]:
     return len_ + 1, xuong
 
 
+KHUNG_NHO = {"W": "D", "M": "W"}
+
+
+def nhip_nho(df: pd.DataFrame, khung: str, tu_ngay) -> int:
+    """Số nhịp tăng của khung nhỏ hơn 1 cấp kể từ ngày vào lệnh (đếm đáy điều chỉnh sau cao hơn đáy trước).
+    Khung D không có khung nhỏ hơn trong dữ liệu ngày → coi như đủ nhịp (bán 70%)."""
+    nho = KHUNG_NHO.get(khung)
+    if nho is None:
+        return 2
+    b = _chi_bao(nen_khung(df.loc[df.index >= tu_ngay - pd.Timedelta(days=40)], nho))
+    b = b[b.index >= tu_ngay]
+    if len(b) < 3:
+        return 1
+    c, l = b["close"].to_numpy(), b["low"].to_numpy()
+    duoi = c < b["ma6"].to_numpy()          # nhịp điều chỉnh khung nhỏ: đóng cửa dưới MA6
+    return _nhip(duoi, l, len(b) - 1)[0]
+
+
 def he_so_nhip(nhip: int, lon_tang: bool) -> float:
     if not lon_tang:
         return 0.3                      # công thức GĐ2: thăm dò tối đa 30%
@@ -105,7 +125,7 @@ def khung_lon_tang(df: pd.DataFrame, khung: str) -> bool:
 def trang_thai(df: pd.DataFrame, khung: str = "D", von: float = 1e9, thi_truong_tot: bool = True,
                so_ma: int = SO_MA, tien_cat_lo_pct: float | None = None, lo: int = 100,
                cap: tuple | None = None) -> dict:
-    """Trạng thái LEVEL 1 hiện tại: tín hiệu mới / đang giữ / bán 50% / bán hết / không có, kèm giá & khối lượng."""
+    """Trạng thái LEVEL 1 hiện tại: tín hiệu mới / đang giữ / bán 70% (30%) / bán nốt / không có, kèm giá & khối lượng."""
     b = _chi_bao(nen_khung(df, khung))
     n = len(b)
     if n < 25:
@@ -200,9 +220,10 @@ def trang_thai(df: pd.DataFrame, khung: str = "D", von: float = 1e9, thi_truong_
     elif e["xac_nhan"] == n - 1:
         tt = "MUA LỆNH XÁC NHẬN"
     elif e["ban_50"] == n - 1:
-        tt = "BÁN 50% (đóng cửa dưới MA điều kiện)"
+        tt = ("BÁN 30% (giá mới chạy 1 nhịp khung nhỏ)" if nhip_nho(df, khung, b.index[e["j"]]) <= 1
+              else "BÁN 70% (đóng cửa dưới MA điều kiện)")
     elif e["ban_50"] is not None:
-        tt = "ĐANG GIỮ 50% – bán nốt khi MA cắt xuống"
+        tt = "ĐANG GIỮ PHẦN CÒN LẠI – bán nốt khi MA cắt xuống"
     else:
         tt = "ĐANG GIỮ"
     out["trang_thai"] = tt
