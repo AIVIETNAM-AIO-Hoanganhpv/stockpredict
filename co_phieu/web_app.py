@@ -393,7 +393,7 @@ def muc_tai_chinh(ma):
                        width="stretch", key=f"bctc_xlsx_{ma}")
 
 
-def muc_chi_so(ma):
+def muc_chi_so(ma, noi="tc"):
     try:
         sk, _ = cb_suc_khoe(ma)
         bang_q, moi = cb_chi_so(ma, True)
@@ -425,7 +425,7 @@ def muc_chi_so(ma):
         if moi.get("pe_lich_su") and moi.get("pe"):
             ls = moi["pe_lich_su"]
             st.caption(f"P/E 5 năm: thấp nhất {min(ls):.1f} · trung vị {pd.Series(ls).median():.1f} · cao nhất {max(ls):.1f}")
-    ky = st.radio("Kỳ", ["Quý (4 quý gần nhất)", "Năm"], horizontal=True, key=f"cs_ky_{ma}")
+    ky = st.radio("Kỳ", ["Quý (4 quý gần nhất)", "Năm"], horizontal=True, key=f"cs_ky_{noi}_{ma}")
     b = bang_q if ky.startswith("Quý") else cb_chi_so(ma, False)[0]
     if not b.empty:
         st.caption("Đơn vị: % với ROE, ROA, biên LN, cổ tức, NIM, NPL, CASA; lần (x) với P/E, P/B, nợ.")
@@ -543,7 +543,7 @@ with tab0:
                 the_khuyen_nghi(kn, von)
                 the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
                 with st.expander("🏢 Doanh nghiệp & chỉ số tài chính"):
-                    muc_chi_so(kq.ma)
+                    muc_chi_so(kq.ma, "kn")
                 chi_tiet(kq, None, "khuyen_nghi")
 
 with tab1:

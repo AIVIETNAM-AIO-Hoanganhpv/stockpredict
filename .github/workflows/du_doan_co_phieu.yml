@@ -2,7 +2,7 @@ name: Dự đoán cổ phiếu & forex
 
 on:
   schedule:
-    - cron: "7 * * * 1-5"      # phút 7 mỗi giờ, thứ 2 – thứ 6 (giờ UTC)
+    - cron: "7 2-8 * * 1-5"    # phút 7 mỗi giờ, 9h–15h giờ VN, thứ 2 – thứ 6 (giờ UTC)
     - cron: "17 9 * * 1-5"     # 16h17 giờ VN: quét toàn thị trường sau phiên
   workflow_dispatch:            # chạy tay: tab Actions → Run workflow
 

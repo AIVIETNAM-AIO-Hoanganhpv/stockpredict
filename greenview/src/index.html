@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>GreenView</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+  <!-- ================= THANH TRÊN ================= -->
+  <header id="top">
+    <a class="brand" id="brand" title="GreenView"><span class="logo"></span><span class="brand-name">Green<b>View</b></span></a>
+    <button class="sym-btn" id="btnSymbol" title="Tìm mã"><span class="sym-ico" id="symIco"></span><span id="symName">—</span><span class="src-tag" id="symSrc"></span></button>
+    <button class="ib desk" id="btnCompare" title="So sánh / thêm mã" data-i="plus"></button>
+    <span class="sep"></span>
+    <div id="tfBar" class="tfbar desk-flex"></div>
+    <button class="tb mob" id="btnTfM" title="Khung thời gian"></button>
+    <button class="ib" id="btnType" title="Loại biểu đồ" data-i="candle"></button>
+    <span class="sep"></span>
+    <button class="tb" id="btnInd" title="Chỉ báo, chỉ số và chiến lược"><i data-i="fx"></i><span class="lbl">Chỉ báo</span></button>
+    <button class="ib desk" id="btnTpl" title="Mẫu chỉ báo" data-i="grid"></button>
+    <span class="sep desk"></span>
+    <button class="tb desk" id="btnAlert" title="Tạo cảnh báo"><i data-i="alarm"></i><span class="lbl">Cảnh báo</span></button>
+    <button class="tb desk" id="btnReplay" title="Chế độ phát lại thanh"><i data-i="replay"></i><span class="lbl">Phát lại</span></button>
+    <span class="grow"></span>
+    <button class="ib mob" id="btnDrawM" title="Bản vẽ" data-i="pen"></button>
+    <button class="ib" id="btnTheme" title="Đổi giao diện sáng/tối" data-i="moon"></button>
+    <button class="ib desk" id="btnShot" title="Chụp ảnh biểu đồ" data-i="camera"></button>
+    <button class="ib desk" id="btnSettings" title="Cài đặt biểu đồ" data-i="gear"></button>
+    <button class="ib" id="btnHub" title="Trung tâm phân tích" data-i="dots"></button>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main id="main">
+    <!-- ================= THANH VẼ BÊN TRÁI ================= -->
+    <nav id="tools"></nav>
+
+    <!-- ================= KHU BIỂU ĐỒ ================= -->
+    <section id="center">
+      <div id="chartWrap">
+        <div id="chart"></div>
+        <div id="legend"></div>
+        <div id="paneLegends"></div>
+        <div id="watermark"></div>
+        <div id="drawBar" class="hidden"></div>
+        <div id="loading" class="hidden"><div class="spinner"></div></div>
+        <div id="replayBar" class="hidden"></div>
+      </div>
+      <div id="bottomPanel" class="hidden"></div>
+    </section>
+
+    <!-- ================= THANH BÊN PHẢI ================= -->
+    <aside id="side">
+      <div class="side-tabs">
+        <button class="st active" data-tab="wl" title="Danh sách theo dõi" data-i="list"></button>
+        <button class="st" data-tab="al" title="Cảnh báo" data-i="alarm"><span id="alBadge" class="badge hidden"></span></button>
+        <button class="st" data-tab="ot" title="Cây đối tượng" data-i="layers"></button>
+        <button class="st" data-tab="tr" title="Chỉ số kỹ thuật" data-i="gauge"></button>
+        <button class="st" data-tab="in" title="Thông tin mã" data-i="info"></button>
+      </div>
+      <div class="side-body" id="sideBody"></div>
+    </aside>
+  </main>
+
+  <!-- Thanh điều hướng dưới (điện thoại) -->
+  <nav id="bottomNav">
+    <button data-page="wl"><i data-i="list"></i><span>D.sách theo dõi</span></button>
+    <button data-page="chart" class="active"><i data-i="chart"></i><span>Biểu đồ</span></button>
+    <button data-page="al"><i data-i="alarm"></i><span>Cảnh báo</span></button>
+    <button data-page="menu"><i data-i="menu"></i><span>Menu</span></button>
+  </nav>
+
+  <footer id="status">
+    <span id="stDot" class="dot"></span><span id="stText">Sẵn sàng</span>
+    <span class="grow"></span>
+    <span id="stInfo"></span>
+    <span id="clock"></span>
+  </footer>
+</div>
+
+<!-- Lớp hộp thoại / bảng trượt -->
+<div id="sheets"></div>
+<div id="toasts"></div>
+<div id="flyout" class="hidden"></div>
+
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
+<script src="js/util.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/sources.js"></script>
+<script src="js/ta.js"></script>
+<script src="js/indicators.js"></script>
+<script src="js/patterns.js"></script>
+<script src="js/strategies.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/drawcore.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/panels.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+co_phieu/du_lieu_ma/cache/
+co_phieu/danh_muc.csv

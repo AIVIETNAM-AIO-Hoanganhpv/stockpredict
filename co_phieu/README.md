@@ -174,8 +174,8 @@ Cần chỉnh lại tham số và kiểm định lại trước khi dùng các k
 **Cách 2 – đưa lên mạng miễn phí (Streamlit Community Cloud), mở được ở bất cứ đâu:**
 1. Vào https://share.streamlit.io và đăng nhập bằng tài khoản GitHub.
 2. Bấm **Create app**, chọn **Deploy a public app from GitHub**, rồi điền:
-   - Repository: `AIVIETNAM-AIO-Hoanganhpv/draft`
-   - Branch: `claude/quirky-bell-oi3coh`
+   - Repository: `AIVIETNAM-AIO-Hoanganhpv/stockpredict`
+   - Branch: `main`
    - Main file path: `co_phieu/web_app.py`
 3. Mở **Advanced settings** và chọn Python **3.12**.
 4. Bấm **Deploy**. Đợi vài phút là có đường link dạng `https://....streamlit.app`.
