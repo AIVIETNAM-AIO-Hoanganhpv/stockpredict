@@ -247,6 +247,9 @@ def tong_hop(ma: str, loai: str, ds: list) -> KetQua:
     thieu = [x.khung for x in ds if not x.votes]
     ds = [x for x in ds if x.votes]
     if not ds:
+        if thieu:
+            return KetQua(ma, loai, [], 0.0, 0, "Chưa đủ dữ liệu",
+                          ["Mã mới niêm yết hoặc ít giao dịch: cần ít nhất 40 phiên để phân tích."])
         return KetQua(ma, loai, [], 0.0, 0, "Không có dữ liệu", ["Không tải được dữ liệu."])
     w = [TRONG_SO_KHUNG.get(x.khung, 1.0) for x in ds]
     diem = sum(x.diem * wi for x, wi in zip(ds, w)) / sum(w)

@@ -10,6 +10,7 @@ Kết quả luôn là DataFrame cột open, high, low, close, volume; index là 
 import datetime as dt
 import gzip
 import json
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -30,7 +31,15 @@ KHUNG = {
 # Hàng hoá trên Yahoo (giá vàng/bạc giao ngay không ổn định → dùng hợp đồng tương lai)
 YAHOO_DAC_BIET = {"XAUUSD": "GC=F", "XAGUSD": "SI=F",
                   # dầu thô (hợp đồng tương lai): WTI và Brent – gõ tên nào cũng được
-                  "USOIL": "CL=F", "WTI": "CL=F", "XTIUSD": "CL=F", "UKOIL": "BZ=F", "BRENT": "BZ=F", "XBRUSD": "BZ=F"}
+                  "USOIL": "CL=F", "WTI": "CL=F", "XTIUSD": "CL=F", "UKOIL": "BZ=F", "BRENT": "BZ=F", "XBRUSD": "BZ=F",
+                  "GOLD": "GC=F", "SILVER": "SI=F"}
+# Tiền mã hoá: BTCUSD / BTCUSDT / BTC → BTC-USD trên Yahoo
+CRYPTO = ("BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "ADA", "TRX", "TON", "AVAX", "LINK", "DOT", "LTC", "SHIB")
+for _c in CRYPTO:
+    for _k in (_c + "USD", _c + "USDT"):
+        YAHOO_DAC_BIET[_k] = _c + "-USD"
+# Mã VN có số/chữ dài: chứng chỉ quỹ ETF (E1VFVN30, FUEVFVND…), chứng quyền (CFPT2501…)
+_MAU_VN_KHAC = re.compile(r"^(E1VF[A-Z0-9]+|FUE[A-Z0-9]+|C[A-Z]{3}\d{4})$")
 
 
 def phan_loai(ma: str) -> tuple[str, str]:
@@ -49,7 +58,7 @@ def phan_loai(ma: str) -> tuple[str, str]:
         return "fx", up
     if len(up) == 6 and up[:3] in TIEN_TE and up[3:] in TIEN_TE:
         return "fx", up
-    if up in CHI_SO_VN or up in _ma_vn():                # mọi mã đang niêm yết (kể cả mã có số: NT2, PC1, C69…)
+    if up in CHI_SO_VN or up in _ma_vn() or _MAU_VN_KHAC.match(up):                # mọi mã đang niêm yết (kể cả mã có số: NT2, PC1, C69…)
         return "vn", up
     if len(up) == 3 and up.isalpha() and not _ma_vn():  # chưa có danh sách mã → đoán theo 3 chữ cái
         return "vn", up

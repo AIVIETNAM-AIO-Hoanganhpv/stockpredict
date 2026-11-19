@@ -227,3 +227,12 @@ tests/               kiểm tra bằng dữ liệu giả lập
   Chương trình chạy một máy chủ nhỏ chỉ trong máy này (http://127.0.0.1:8765), lấy giá hộ trình duyệt.
 - Trong web app: mục chi tiết một mã › bật **Xem bằng GreenView**.
 - Giá VN: Vietcap, khi bị chặn (VD: Streamlit Cloud báo 403) tự chuyển sang VNDirect.
+
+## Web app (bản gọn, 4 mục)
+- **🏠 Hôm nay**: thị trường chung đang tăng/giảm + 5 mã điểm cao nhất, ghi rõ NÊN MUA / CHỜ / CHƯA NÊN MUA, kèm giá mua,
+  cắt lỗ, chốt lời, ngày dự kiến; mã nên cân nhắc chốt lời nếu đang giữ.
+- **🔍 Tra cứu mã**: thẻ kết luận 1 dòng + độ tin cậy (các lần công cụ báo Mua chính mã đó trước đây và kết quả,
+  cùng kết quả kiểm định toàn thị trường); bên dưới là Biểu đồ (có GreenView), Doanh nghiệp, Tin tức, Chi tiết chỉ báo.
+- **💼 Danh mục của tôi**: mã đang giữ + danh sách theo dõi.
+- **🧰 Nâng cao**: bảng khuyến nghị đầy đủ, theo ngày, bộ lọc cơ bản, tin thị trường.
+- Khi Vietcap chặn (bản online), giá lấy từ VNDirect; phần Doanh nghiệp hiện bản tóm tắt từ VNDirect.

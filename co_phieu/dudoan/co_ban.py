@@ -555,3 +555,31 @@ def xuat_excel(ma: str, duong_dan) -> Path:
             if not b.empty:
                 b.to_excel(w, sheet_name=ten[:31], index=False)
     return duong_dan
+
+
+# ------------------------------------------------------------------ dự phòng VNDirect (khi Vietcap chặn, VD: Streamlit Cloud)
+VND_FINFO = "https://api-finfo.vndirect.com.vn/v4/"
+VND_CHI_SO = {"MARKETCAP": "von_hoa", "PRICE_TO_EARNINGS": "pe", "PRICE_TO_BOOK": "pb", "ROAE_TR_AVG5Q": "roe",
+              "ROAA_TR_AVG5Q": "roa", "EPS_TR": "eps", "BVPS_CR": "bvps", "DIVIDEND_YIELD": "co_tuc", "BETA": "beta"}
+
+
+def tom_tat_vnd(ma: str) -> dict:
+    """Hồ sơ + chỉ số chính từ VNDirect: dùng khi nguồn chính (Vietcap) không truy cập được."""
+    ma = ma.upper()
+    ho_so = (_goi(f"{VND_FINFO}company_profiles?q=code:{ma}") or [{}])[0]
+    try:
+        cs = _goi(f"{VND_FINFO}ratios/latest?filter=ratioCode:{','.join(VND_CHI_SO)}&where=code:{ma}"
+                  "&order=reportDate&fields=ratioCode,value,reportDate") or []
+    except Exception:
+        cs = []
+    if not ho_so and not cs:
+        raise RuntimeError(f"VNDirect không có dữ liệu cho {ma}")
+    out = {"ten": ho_so.get("vnName") or ma, "san": ho_so.get("floor"), "thanh_lap": ho_so.get("foundDate"),
+           "dia_chi": ho_so.get("vnAddress"), "website": ho_so.get("website"), "nhan_vien": ho_so.get("employees"),
+           "gioi_thieu": ho_so.get("vnSummary"), "nguon": "VNDirect"}
+    for x in cs:
+        k = VND_CHI_SO.get(x.get("ratioCode"))
+        if k and x.get("value") is not None:
+            out[k] = float(x["value"])
+            out["ngay_chi_so"] = max(out.get("ngay_chi_so", ""), x.get("reportDate") or "")
+    return out

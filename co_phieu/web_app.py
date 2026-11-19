@@ -60,12 +60,31 @@ def the_ket_qua(kq):
         unsafe_allow_html=True)
 
 
-def chi_tiet(kq, tl, tab: str):
-    the_ket_qua(kq)
+def chi_tiet(kq, tl, tab: str, dau: bool = True):
+    """Chi tiết kỹ thuật. dau=False: bỏ thẻ kết quả + kế hoạch Fibonacci (đã có thẻ kết luận ở trên)."""
+    if dau:
+        the_ket_qua(kq)
     if not kq.khung:
         for g in kq.ghi_chu:
             st.error(g)
         return
+    if dau:
+        ke_hoach_fibo(kq, tl)
+    else:
+        for g in kq.ghi_chu:
+            st.caption("• " + g)
+    st.markdown("##### Các khung thời gian")
+    for k in kq.khung:
+        with st.expander(f"{MUI_TEN[k.xu_huong]} Khung {k.khung}: {k.nhan} ({k.diem:+.0f})"):
+            for v in k.votes:
+                dau_ = MUI_TEN[(v.gia_tri > 0) - (v.gia_tri < 0)]
+                st.markdown(f"{dau_} **{v.ten}**: {v.ly_do}")
+            for g in k.ghi_chu:
+                st.caption("• " + g)
+    bieu_do_plotly(kq, tab)
+
+
+def ke_hoach_fibo(kq, tl):
     kh = bao_cao.ke_hoach(kq)
     c1, c2, c3 = st.columns(3)
     c1.metric("Giá", _f(kq.chinh.gia))
@@ -82,15 +101,8 @@ def chi_tiet(kq, tl, tab: str):
     for g in kq.ghi_chu:
         st.warning(g)
 
-    st.markdown("##### Các khung thời gian")
-    for k in kq.khung:
-        with st.expander(f"{MUI_TEN[k.xu_huong]} Khung {k.khung}: {k.nhan} ({k.diem:+.0f})"):
-            for v in k.votes:
-                dau = MUI_TEN[(v.gia_tri > 0) - (v.gia_tri < 0)]
-                st.markdown(f"{dau} **{v.ten}**: {v.ly_do}")
-            for g in k.ghi_chu:
-                st.caption("• " + g)
 
+def bieu_do_plotly(kq, tab):
     st.markdown("##### Biểu đồ")
     if st.toggle("Xem bằng GreenView (kèm vùng mua, cắt lỗ, chốt lời và các lần báo Mua trước đây)",
                  key=f"gv_{tab}_{kq.ma}"):
@@ -283,11 +295,47 @@ def ty(x):
     return "–" if x is None or pd.isna(x) else f"{x / 1e9:,.0f} tỷ"
 
 
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cb_vnd(ma):
+    return CB.tom_tat_vnd(ma)
+
+
+def hien_tom_tat_vnd(ma, phan: str):
+    """Nguồn chính (Vietcap) bị chặn → hiện bản tóm tắt từ VNDirect."""
+    try:
+        t = cb_vnd(ma)
+    except Exception as e:
+        loi_nguon(e, "thông tin doanh nghiệp")
+        return
+    if phan == "dn":
+        st.markdown(f"#### {t['ten']}")
+        st.caption(" · ".join(x for x in [t.get("san"), f"thành lập {t['thanh_lap']}" if t.get("thanh_lap") else "",
+                                          t.get("website")] if x))
+        if t.get("von_hoa"):
+            st.metric("Vốn hóa", f"{t['von_hoa'] / 1e12:,.1f} nghìn tỷ")
+        if t.get("gioi_thieu"):
+            with st.expander("Giới thiệu doanh nghiệp"):
+                st.write(t["gioi_thieu"])
+    else:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("P/E", f"{t['pe']:.1f}" if t.get("pe") else "–")
+        c2.metric("P/B", f"{t['pb']:.2f}" if t.get("pb") else "–")
+        c3.metric("ROE", f"{t['roe']:.1%}" if t.get("roe") else "–")
+        c4.metric("Cổ tức", f"{t['co_tuc']:.1%}" if t.get("co_tuc") else "–")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("EPS", f"{t['eps']:,.0f}" if t.get("eps") else "–")
+        c2.metric("Giá trị sổ sách/CP", f"{t['bvps']:,.0f}" if t.get("bvps") else "–")
+        c3.metric("ROA", f"{t['roa']:.1%}" if t.get("roa") else "–")
+        c4.metric("Beta", f"{t['beta']:.2f}" if t.get("beta") else "–")
+    st.caption("Bản tóm tắt từ VNDirect (nguồn chính tạm không truy cập được từ máy chủ này)"
+               + (f", số liệu ngày {t['ngay_chi_so']}" if t.get("ngay_chi_so") else "") + ".")
+
+
 def muc_doanh_nghiep(ma):
     try:
         hs, cd = cb_ho_so(ma)
-    except Exception as e:
-        loi_nguon(e, "thông tin doanh nghiệp")
+    except Exception:
+        hien_tom_tat_vnd(ma, "dn")
         return
     if not hs:
         st.info("Không có thông tin doanh nghiệp cho mã này.")
@@ -408,11 +456,11 @@ def muc_tin_tuc(ma, ten):
             st.markdown(f"- **{x['ngay']}** · {html_esc(x['tieu_de'])}" + (f" ([nguồn]({x['link']}))" if x["link"] else ""))
 
 
-def muc_tai_chinh(ma):
+def muc_tai_chinh(ma, noi="tc"):
     try:
         sk, quy = cb_suc_khoe(ma)
     except Exception as e:
-        loi_nguon(e, "báo cáo tài chính")
+        loi_nguon(e, "báo cáo tài chính chi tiết")
         return
     if not quy.empty:
         import plotly.graph_objects as go
@@ -422,10 +470,10 @@ def muc_tai_chinh(ma):
         fig.add_bar(x=q["ky"], y=q["ln"] / 1e9, name="Lợi nhuận (tỷ)", marker_color="#2563eb")
         fig.update_layout(barmode="group", height=300, margin=dict(l=8, r=8, t=30, b=8), template="plotly_white",
                           title="Doanh thu & lợi nhuận theo quý", legend=dict(orientation="h", y=-0.2))
-        st.plotly_chart(fig, width="stretch", key=f"bctc_bd_{ma}")
+        st.plotly_chart(fig, width="stretch", key=f"bctc_bd_{noi}_{ma}")
     c1, c2 = st.columns(2)
-    phan = c1.selectbox("Báo cáo", list(CB.TEN_PHAN), format_func=CB.TEN_PHAN.get, key=f"bctc_phan_{ma}")
-    ky = c2.radio("Kỳ", ["Năm", "Quý"], horizontal=True, key=f"bctc_ky_{ma}")
+    phan = c1.selectbox("Báo cáo", list(CB.TEN_PHAN), format_func=CB.TEN_PHAN.get, key=f"bctc_phan_{noi}_{ma}")
+    ky = c2.radio("Kỳ", ["Năm", "Quý"], horizontal=True, key=f"bctc_ky_{noi}_{ma}")
     try:
         b = cb_bctc(ma, phan, ky == "Quý")
     except Exception as e:
@@ -442,15 +490,15 @@ def muc_tai_chinh(ma):
     except Exception:
         return
     st.download_button("⬇ Tải BCTC & chỉ số (Excel)", du_lieu_xlsx, file_name=f"{ma}_tai_chinh.xlsx",
-                       width="stretch", key=f"bctc_xlsx_{ma}")
+                       width="stretch", key=f"bctc_xlsx_{noi}_{ma}")
 
 
 def muc_chi_so(ma, noi="tc"):
     try:
         sk, _ = cb_suc_khoe(ma)
         bang_q, moi = cb_chi_so(ma, True)
-    except Exception as e:
-        loi_nguon(e, "chỉ số tài chính")
+    except Exception:
+        hien_tom_tat_vnd(ma, "cs")
         return
     if sk.du_lieu:
         st.markdown(f"#### Sức khỏe tài chính: {sk.tong}/5")
@@ -489,8 +537,7 @@ def muc_chi_so(ma, noi="tc"):
 
 
 # ------------------------------------------------------------------------------------------ giao diện
-st.markdown("### 📈 Dự đoán xu hướng & khuyến nghị")
-st.caption("Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1")
+st.markdown("#### 📈 Dự đoán & khuyến nghị cổ phiếu")
 
 with st.expander("⚙ Cài đặt chung", expanded=False):
     tam_nhan = st.radio("Tầm nắm giữ", list(TAM), horizontal=True)
@@ -498,11 +545,9 @@ with st.expander("⚙ Cài đặt chung", expanded=False):
                           step=10_000_000, format="%d")
 tam = TAM[tam_nhan]
 
-tab0, tab_ngay, tab_loc, tab1, tab_tin, tab2, tab3 = st.tabs(
-    ["🏆 Khuyến nghị", "📅 Theo ngày", "🔎 Bộ lọc", "🔍 Tra cứu", "📰 Tin thị trường", "💼 Danh mục", "📋 Theo dõi"])
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
 
-with tab0:
+def trang_bang_day_du():
     kho = kho_thi_truong()
     doc_file_thi_truong(kho)
     c1, c2 = st.columns(2)
@@ -604,53 +649,6 @@ with tab0:
                     muc_chi_so(kq.ma, "kn")
                 chi_tiet(kq, None, "khuyen_nghi")
 
-with tab1:
-    with st.form("tra_cuu"):
-        ma = st.text_input("Mã (VD: FPT, VNINDEX, EURUSD, XAUUSD, AAPL)", value=st.session_state.get("ma", "FPT"))
-        thu_lai = st.checkbox("Thử lại trên quá khứ (chậm hơn)", value=True)
-        ok = st.form_submit_button("Phân tích", type="primary", width="stretch")
-    if ok:
-        st.session_state["ma"] = ma.strip().upper()
-    ma = st.session_state.get("ma", "FPT")
-    if ma:
-        with st.spinner(f"Đang phân tích {ma}…"):
-            kq, _, tl = phan_tich(ma, thu_lai)
-        if kq.khung and kq.loai == "vn" and kq.ma in du_lieu.CHI_SO_VN and tam in kq.frames:
-            st.caption("Chỉ số không mua/bán trực tiếp được – chỉ xem xu hướng và tín hiệu đỉnh.")
-            the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
-        elif kq.khung and kq.loai == "vn" and tam in kq.frames:
-            t_kt, t_dn, t_tc, t_cs, t_tin = st.tabs(["📈 Kỹ thuật", "🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số",
-                                                    "📰 Tin tức"])
-            with t_dn:
-                muc_doanh_nghiep(kq.ma)
-            with t_tin:
-                try:
-                    ten = (cb_ho_so(kq.ma)[0] or {}).get("ten_ngan")
-                except Exception:
-                    ten = None
-                muc_tin_tuc(kq.ma, ten)
-            with t_tc:
-                muc_tai_chinh(kq.ma)
-            with t_cs:
-                muc_chi_so(kq.ma)
-            with t_kt:
-                kn = K.khuyen_nghi(kq, tam)
-                try:
-                    CB.dieu_chinh_khuyen_nghi(kn, CB.tom_tat_co_ban(kq.ma, kq.frames.get("D")))
-                except Exception:
-                    pass
-                the_khuyen_nghi(kn, von)
-                the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
-                chi_tiet(kq, tl, "tra_cuu")
-            kq = None
-        elif kq.khung:
-            st.caption("Khuyến nghị mua & máy tính lãi/lỗ áp dụng cho cổ phiếu Việt Nam.")
-            khung_dinh = "4H" if kq.loai == "fx" else "D"
-            if khung_dinh in kq.frames:
-                the_tin_hieu_dinh(K.tin_hieu_dinh(kq, khung_dinh, loai=kq.loai))
-        if kq is not None:
-            chi_tiet(kq, tl, "tra_cuu")
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def gia_ngay(ma):
     return du_lieu.tai(ma, "D")
@@ -660,7 +658,7 @@ def tim_ngay():
     return LS.ds_ngay(BAO_CAO / "lich_su")
 
 
-with tab_ngay:
+def trang_theo_ngay():
     ngay_co = tim_ngay()
     if not ngay_co:
         st.info("Chưa có bản khuyến nghị nào được lưu. Mỗi lần quét toàn thị trường (lịch GitHub hằng ngày sau 15h, "
@@ -736,7 +734,7 @@ with tab_ngay:
             else:
                 st.dataframe(lich, hide_index=True, width="stretch", height=480)
 
-with tab_loc:
+def trang_bo_loc():
     kho = kho_thi_truong()
     doc_file_thi_truong(kho)
     b0 = kho.get(tam)
@@ -776,7 +774,7 @@ with tab_loc:
         st.download_button("⬇ Tải kết quả lọc (CSV)", b[cot].to_csv(index=False).encode("utf-8-sig"),
                            file_name="bo_loc.csv", mime="text/csv", width="stretch")
 
-with tab_tin:
+def trang_tin():
     nhom = st.radio("Nhóm tin", list(TT.NHOM) + ["Chủ đề vĩ mô"], horizontal=True, key="tin_nhom")
     if nhom == "Chủ đề vĩ mô":
         cd = st.radio("Chủ đề", list(TT.CHU_DE), horizontal=True, key="tin_cd")
@@ -803,7 +801,7 @@ with tab_tin:
                    + (" (tin tiếng Anh dùng bộ từ khóa tiếng Anh)" if nhom == "Kinh tế thế giới" else ""))
         hien_tin(loc, 80)
 
-with tab2:
+def trang_danh_muc():
     st.caption("Nhập các mã đang nắm giữ. Khi chạy trên máy tính, danh mục được lưu vào danh_muc.csv; "
                "trên web hãy tải file về để lưu.")
     if "dm" not in st.session_state:
@@ -880,7 +878,7 @@ with tab2:
             st.warning(f"⚠ {len(xau)} tin tiêu cực gần đây liên quan đến mã đang giữ – xem bên dưới.")
         hien_tin(tin_dm, 20)
 
-with tab3:
+def trang_theo_doi():
     ds_txt = st.text_area("Danh sách mã (cách nhau bởi dấu cách hoặc xuống dòng)",
                           value=" ".join(mac_dinh), height=80)
     ds = tuple(x for x in ds_txt.replace(",", " ").split() if x)
@@ -907,6 +905,244 @@ with tab3:
         chon = st.selectbox("Xem chi tiết mã", [k.ma for k in ket_qua])
         kq = next(k for k in ket_qua if k.ma == chon)
         chi_tiet(kq, None, "danh_sach")
+
+
+# ------------------------------------------------------------------------------------------ kết luận rõ ràng
+# Kiểm định toàn thị trường (khuyen_nghi.py, README): 2020–2026, 2.245 lệnh "Mua"
+KD_LENH, KD_THANG, KD_LAI, KD_NGAU_NHIEN = 2245, 0.44, 0.036, 0.023
+KET_LUAN = {  # mức khuyến nghị → (chữ to, màu, câu hành động)
+    "Mua": ("NÊN MUA", "#15803d"),
+    "Gần đủ điều kiện": ("CHỜ – SẮP ĐỦ ĐIỀU KIỆN MUA", "#d97706"),
+    "Theo dõi": ("CHƯA NÊN MUA – CHỈ THEO DÕI", "#64748b"),
+    "Không mua": ("KHÔNG MUA", "#dc2626"),
+}
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def do_tin_cay(ma: str) -> dict:
+    """Các lần công cụ báo Mua chính mã này trong ~2 năm và kết quả (theo đúng quy tắc vào/ra lệnh)."""
+    ds = gv_goi(ma).get("tin_hieu") or []
+    xong = [x for x in ds if x["ket_qua"] != "Đang giữ"]
+    lai = [x["lai_pct"] for x in xong if x["lai_pct"] is not None]
+    return {"so": len(xong), "thang": sum(x > 0 for x in lai), "tb": sum(lai) / len(lai) if lai else None,
+            "dang_giu": len(ds) - len(xong), "ds": ds}
+
+
+def cau_tin_cay(tc: dict | None) -> str:
+    so = lambda x: f"{x:+.1%}".replace(".", ",")  # noqa: E731
+    chung = (f"Kiểm định toàn thị trường 2020–2026 ({KD_LENH:,} lệnh".replace(",", ".")
+             + f"): lệnh Mua lãi {KD_THANG:.0%} số lần, TB {so(KD_LAI)}/lệnh; mua ngẫu nhiên giữ 60 phiên "
+             f"{so(KD_NGAU_NHIEN)} → **chưa tốt hơn mua ngẫu nhiên một cách chắc chắn**, chỉ nên tham khảo.")
+    if tc is None:
+        return chung
+    if not tc["so"]:
+        rieng = "Mã này chưa có lần báo Mua nào (đã đóng lệnh) trong ~2 năm để đánh giá riêng."
+    else:
+        rieng = (f"Riêng mã này ~2 năm: báo Mua {tc['so']} lần, **lãi {tc['thang']}/{tc['so']}**, "
+                 f"TB {tc['tb']:+.1f}%/lệnh.")
+    return rieng + "  \n" + chung
+
+
+def the_ket_luan(kq, kn, dinh, tc: dict | None):
+    """Thẻ kết luận một mã: NÊN MUA / CHỜ / KHÔNG MUA + giá + độ tin cậy."""
+    chu, mau = KET_LUAN.get(kn.muc, (kn.muc.upper(), "#64748b"))
+    dong = []
+    g = kq.chinh.gia
+    if kn.muc in ("Mua", "Gần đủ điều kiện") and kn.gia_mua:
+        vung = f"{kn.vung.thap:,.0f}–{kn.vung.cao:,.0f}" if kn.vung else f"{kn.gia_mua:,.0f}"
+        tg = kn.thoi_gian
+        ngay = ""
+        if tg is not None and tg.thuong is not None and tg.ngay(tg.thuong) is not None:
+            ngay = f", dự kiến khoảng **{tg.ngay(tg.thuong):%d/%m/%Y}**"
+        dau = "Mua quanh" if kn.muc == "Mua" else "Chưa mua vội. Nếu tín hiệu đủ, mua quanh"
+        dong.append(f"{dau} **{vung}** (giá hiện {g:,.0f}).")
+        dong.append(f"Cắt lỗ **{kn.cat_lo:,.0f}** ({kn.lo_pct:+.1%}) · chốt lời **{kn.chot_loi1:,.0f}** "
+                    f"({kn.lai_pct:+.1%}){ngay} · giữ tối đa {K.GIU_TOI_DA} phiên.")
+    elif kn.ly_do:
+        dong.append(f"Giá hiện {g:,.0f}. Lý do: {kn.ly_do[0]}")
+    if dinh is not None and dinh.muc in ("Bán mạnh", "Chốt lời dần"):
+        vb = f" quanh {dinh.vung_ban[0]:,.0f}–{dinh.vung_ban[1]:,.0f}" if dinh.vung_ban else ""
+        dong.append(f"Nếu đang giữ: có tín hiệu đỉnh (**{dinh.muc}**){vb} – tín hiệu này độ tin cậy thấp.")
+    st.markdown(
+        f"<div style='padding:14px 16px;border-radius:14px;background:{mau};color:white'>"
+        f"<div style='font-size:14px;opacity:.9'>{kq.ma} · {'ngắn hạn 1–3 tháng' if kn.tam == 'D' else 'trung hạn 3–9 tháng'}"
+        f" · điểm {kn.diem:+.0f}</div>"
+        f"<div style='font-size:28px;font-weight:800;line-height:1.2'>{chu}</div></div>", unsafe_allow_html=True)
+    st.markdown("  \n".join(dong))
+    st.caption(cau_tin_cay(tc).replace("**", ""))
+
+
+def the_xu_huong(kq):
+    """Chỉ số / forex / cổ phiếu nước ngoài: kết luận theo xu hướng."""
+    mau = MAU[kq.xu_huong]
+    chu = {1: "XU HƯỚNG TĂNG", -1: "XU HƯỚNG GIẢM", 0: "ĐI NGANG – CHƯA RÕ"}[kq.xu_huong]
+    st.markdown(f"<div style='padding:14px 16px;border-radius:14px;background:{mau};color:white'>"
+                f"<div style='font-size:14px;opacity:.9'>{kq.ma} · điểm {kq.diem:+.0f}/100</div>"
+                f"<div style='font-size:28px;font-weight:800'>{MUI_TEN[kq.xu_huong]} {chu}</div></div>",
+                unsafe_allow_html=True)
+    kh = bao_cao.ke_hoach(kq)
+    if kh.get("sl") and kh.get("tp1"):
+        st.markdown(f"Giá {kq.chinh.gia:,.4g} · cắt lỗ **{kh['sl']:,.4g}** · chốt lời **{kh['tp1']:,.4g}** "
+                    f"(kế hoạch Fibonacci khung {kq.chinh.khung}, chưa kiểm định).")
+    st.caption("Chỉ dự báo xu hướng; khuyến nghị mua kèm kiểm định chỉ áp dụng cho cổ phiếu Việt Nam.")
+
+
+def la_co_phieu_vn(kq):
+    return kq.khung and kq.loai == "vn" and kq.ma not in du_lieu.CHI_SO_VN and tam in kq.frames
+
+
+def xem_ma(ma: str, noi: str):
+    """Toàn bộ thông tin một mã: kết luận → biểu đồ → doanh nghiệp → tin → chi tiết."""
+    with st.spinner(f"Đang phân tích {ma}…"):
+        kq, _, tl = phan_tich(ma, False)
+    if not kq.khung:
+        st.markdown(f"#### {ma}: Không có dữ liệu")
+        for g in kq.ghi_chu[:3]:
+            st.warning(g)
+        return
+    if la_co_phieu_vn(kq):
+        kn = K.khuyen_nghi(kq, tam)
+        try:
+            CB.dieu_chinh_khuyen_nghi(kn, CB.tom_tat_co_ban(kq.ma, kq.frames.get("D")))
+        except Exception:
+            pass
+        dinh = K.tin_hieu_dinh(kq, tam)
+        try:
+            with st.spinner("Đang kiểm tra các lần báo Mua trước đây của mã này…"):
+                tc = do_tin_cay(kq.ma)
+        except Exception:
+            tc = None
+        the_ket_luan(kq, kn, dinh, tc)
+        with st.expander("💰 Tính tiền lãi/lỗ theo số vốn & lý do chi tiết"):
+            the_khuyen_nghi(kn, von)
+            the_tin_hieu_dinh(dinh)
+            if tc and tc["ds"]:
+                st.markdown("**Các lần báo Mua trước đây**")
+                st.dataframe(pd.DataFrame([{"Ngày mua": pd.Timestamp(x["t_mua"], unit="s").strftime("%d/%m/%Y"),
+                                            "Giá mua": x["gia_mua"], "Kết quả": x["ket_qua"],
+                                            "Ngày ra": pd.Timestamp(x["t_ra"], unit="s").strftime("%d/%m/%Y"),
+                                            "Lãi %": x["lai_pct"]} for x in tc["ds"]]).style.format(
+                    {"Giá mua": "{:,.0f}", "Lãi %": "{:+.1f}%"}), hide_index=True, width="stretch")
+        t_bd, t_dn, t_tin, t_kt = st.tabs(["📈 Biểu đồ", "🏢 Doanh nghiệp", "📰 Tin tức", "🔬 Chi tiết chỉ báo"])
+        with t_bd:
+            bieu_do_plotly(kq, noi)
+        with t_dn:
+            muc_doanh_nghiep(kq.ma)
+            st.markdown("---")
+            muc_chi_so(kq.ma, noi)
+            with st.expander("📊 Báo cáo tài chính đầy đủ"):
+                muc_tai_chinh(kq.ma, noi)
+        with t_tin:
+            try:
+                ten = (cb_ho_so(kq.ma)[0] or {}).get("ten_ngan")
+            except Exception:
+                ten = None
+            muc_tin_tuc(kq.ma, ten)
+        with t_kt:
+            chi_tiet(kq, tl, noi + "_kt", dau=False)
+    else:
+        the_xu_huong(kq)
+        khung_dinh = "4H" if kq.loai == "fx" else tam
+        if khung_dinh in kq.frames:
+            with st.expander("Tín hiệu đỉnh"):
+                the_tin_hieu_dinh(K.tin_hieu_dinh(kq, khung_dinh, loai=kq.loai))
+        chi_tiet(kq, tl, noi, dau=False)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def thi_truong_chung():
+    kq, _, _ = phan_tich_ma("VNINDEX")
+    return kq
+
+
+def trang_hom_nay():
+    kho = kho_thi_truong()
+    doc_file_thi_truong(kho)
+    # 1) Thị trường chung
+    try:
+        vni = thi_truong_chung()
+    except Exception:
+        vni = None
+    if vni is not None and vni.khung:
+        loi_khuyen = {1: "có thể giải ngân dần vào mã tốt", 0: "giải ngân thận trọng, ưu tiên mã thật mạnh",
+                      -1: "nên giữ nhiều tiền mặt, hạn chế mua mới"}[vni.xu_huong]
+        st.markdown(f"<div style='padding:10px 14px;border-radius:12px;border:2px solid {MAU[vni.xu_huong]}'>"
+                    f"<b>Thị trường (VNINDEX {vni.chinh.gia:,.0f}):</b> "
+                    f"<span style='color:{MAU[vni.xu_huong]};font-weight:700'>{MUI_TEN[vni.xu_huong]} {vni.nhan.upper()}"
+                    f"</span> → {loi_khuyen}.</div>", unsafe_allow_html=True)
+    b = kho.get(tam)
+    if b is None or b.empty:
+        st.info("Chưa có bảng khuyến nghị – mở mục **Cập nhật dữ liệu** bên dưới và bấm Quét.")
+    else:
+        tk = kho["thong_ke"] or {}
+        b = b[b["GTGD (tỷ)"].fillna(0) >= 1]
+        hang = {m: i for i, m in enumerate(K.MUC)}
+        b = b.assign(_h=b["Khuyến nghị"].map(hang)).sort_values(["_h", "Điểm"], ascending=False)
+        mua = b[b["Khuyến nghị"] == "Mua"]
+        st.markdown(f"#### 🟢 Nên mua hôm nay: {len(mua)} mã")
+        st.caption(f"Cập nhật {kho['luc']} · đã xét {tk.get('phan_tich', len(b))} mã đủ thanh khoản. "
+                   + ("Thị trường xấu nên rất ít mã đạt đủ điều kiện – đó là tín hiệu nên chờ." if len(mua) < 3 else ""))
+        top = b.head(max(5, len(mua)))
+        for _, r in top.iterrows():
+            chu, mau = KET_LUAN.get(r["Khuyến nghị"], (r["Khuyến nghị"], "#64748b"))
+            gia = (f"mua {r['Vùng mua']} · cắt lỗ {r['Cắt lỗ']:,.0f} · chốt lời {r['Chốt lời']:,.0f}"
+                   if pd.notna(r.get("Cắt lỗ")) and pd.notna(r.get("Chốt lời")) and r.get("Vùng mua") else "")
+            dk = r.get("Dự kiến chốt lời")
+            ngay = f" · dự kiến {dk}" if isinstance(dk, str) and dk else ""
+            st.markdown(f"<div style='padding:8px 12px;margin:4px 0;border-left:6px solid {mau};background:#f8fafc;"
+                        f"border-radius:8px'><b style='font-size:17px'>{r['Mã']}</b> "
+                        f"<span style='color:{mau};font-weight:700'>{chu}</span> · giá {r['Giá']:,.0f} "
+                        f"<span style='color:#64748b;font-size:13px'>· {r.get('Ngành') or ''}</span><br>"
+                        f"<span style='font-size:14px'>{gia}{ngay}</span></div>", unsafe_allow_html=True)
+        st.caption("Luôn hiện 5 mã điểm cao nhất kể cả khi chưa đủ điều kiện mua (ghi rõ CHỜ / CHƯA NÊN MUA). "
+                   + cau_tin_cay(None).replace("**", ""))
+        ban = kho.get(f"ban_{tam}")
+        if ban is not None and not ban.empty:
+            manh = ban[ban["Tín hiệu"] == "Bán mạnh"]
+            if not manh.empty:
+                st.markdown(f"#### 🔴 Nếu đang giữ, cân nhắc chốt lời: {', '.join(manh['Mã'].head(12))}")
+                st.caption("Tín hiệu đỉnh – kiểm định cho thấy độ tin cậy thấp, chỉ để tham khảo.")
+        chon = st.selectbox("Xem chi tiết mã", top["Mã"].tolist(), index=None, placeholder="Chọn mã để xem chi tiết",
+                            key="hn_chon")
+        if chon:
+            xem_ma(chon, "hom_nay")
+    with st.expander("🔄 Cập nhật dữ liệu (quét lại toàn thị trường)"):
+        c1, c2 = st.columns(2)
+        san = c1.multiselect("Sàn", ["HSX", "HNX", "UPCOM"], default=["HSX", "HNX", "UPCOM"],
+                             format_func=lambda x: du_lieu.SAN[x], key="hn_san")
+        gtgd = c2.number_input("GTGD tối thiểu (tỷ đồng/phiên)", min_value=0.0, value=1.0, step=0.5, key="hn_gtgd")
+        if st.button("🔄 Quét toàn thị trường (~3–7 phút)", width="stretch", key="hn_quet"):
+            quet_ngay(kho, san or ["HSX"], gtgd * 1e9)
+            st.rerun()
+
+
+def trang_tra_cuu():
+    with st.form("tra_cuu"):
+        ma = st.text_input("Nhập mã (VD: FPT, HPG, VNINDEX, XAUUSD, EURUSD, AAPL)",
+                           value=st.session_state.get("ma", "FPT"))
+        ok = st.form_submit_button("Phân tích", type="primary", width="stretch")
+    if ok:
+        st.session_state["ma"] = ma.strip().upper()
+    ma = st.session_state.get("ma", "FPT")
+    if ma:
+        xem_ma(ma, "tra_cuu")
+
+
+NANG_CAO = {"📋 Bảng khuyến nghị đầy đủ": "trang_bang_day_du", "📅 Khuyến nghị theo ngày": "trang_theo_ngay",
+            "🔎 Bộ lọc cơ bản": "trang_bo_loc", "📰 Tin thị trường": "trang_tin"}
+
+t_hn, t_tc, t_dm, t_nc = st.tabs(["🏠 Hôm nay", "🔍 Tra cứu mã", "💼 Danh mục của tôi", "🧰 Nâng cao"])
+with t_hn:
+    trang_hom_nay()
+with t_tc:
+    trang_tra_cuu()
+with t_dm:
+    trang_danh_muc()
+    with st.expander("📋 Danh sách theo dõi (nhiều mã cùng lúc)"):
+        trang_theo_doi()
+with t_nc:
+    trang = st.radio("Mục", list(NANG_CAO), horizontal=True, key="nang_cao", label_visibility="collapsed")
+    globals()[NANG_CAO[trang]]()
 
 st.divider()
 st.caption("⚠ " + bao_cao.CANH_BAO)
