@@ -706,7 +706,7 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
 
 
 LAI_FIBO_TL = 1.0       # cổ phiếu dài hạn: chỉ dùng mức Fibo 1,0 (không 1,618)
-LAI_TOI_THIEU = 0.10    # lãi dự kiến tới mức 1,0 dưới 10% → không vào lệnh
+LAI_TOI_THIEU = 0.0     # người dùng bỏ điều kiện lãi dự kiến ≥ 10% (19/11/2026) – Fibo 1,0 chỉ để tham khảo
 ADX_TOI_THIEU = 25      # ADX tuần tối thiểu (kèm +DI > −DI)
 CAT_LO_TOI_DA = 0.15    # cắt lỗ không xa quá 15%
 GIU_TOI_DA_DAI_HAN = {"W": "9 tháng", "M": "10 năm"}

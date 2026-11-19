@@ -67,7 +67,7 @@ def test_fibo_dai_han_chi_muc_1():
         x = F.muc_tieu_song(df, khung, float(df.close.iloc[-1]), ti_le_co_dinh=1.0)
         if x:
             assert x["ti_le"] == 1.0 and abs(x["chot_loi"] - (x["C"] + x["B"] - x["A"])) < 1e-6
-    assert K.LAI_FIBO_TL == 1.0 and K.LAI_TOI_THIEU == 0.10
+    assert K.LAI_FIBO_TL == 1.0 and K.LAI_TOI_THIEU == 0.0
 
 
 def test_adx_tuan_tren_the_ke_hoach():

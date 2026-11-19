@@ -2912,10 +2912,10 @@ window.App = window.App || {};
   // THÁNG (không có thì sóng TUẦN) ≥ 10%; KHÔNG tự bán ở mức Fibo – giữ đến khi khung THÁNG có tín hiệu bán MACD+Sto;
   // cắt lỗ ở đáy sóng TUẦN gần nhất.
   DEFS.st_daihan = {
-    id: 'st_daihan', name: 'Khoá học — Cổ phiếu trung/dài hạn: Fibo 1,0 ≥ 10%, ADX tuần, giữ đến tín hiệu bán tháng', cat: 'strategy', overlay: true, plots: [], levels: [],
+    id: 'st_daihan', name: 'Khoá học — Cổ phiếu trung/dài hạn: đồng pha, ADX tuần, giữ đến tín hiệu bán tháng', cat: 'strategy', overlay: true, plots: [], levels: [],
     inputs: [['giu', 'Thời gian giữ', 'Trung hạn (tối đa 9 tháng)', 'sel', ['Trung hạn (tối đa 9 tháng)', 'Dài hạn (tối đa 10 năm)']],
-      ['lai', 'Lãi dự kiến tối thiểu (%)', 10, 'float'], ['catMax', 'Cắt lỗ tối đa (%)', 15, 'float'],
-      ['adx', 'ADX tuần tối thiểu (0 = tắt)', 25, 'float'],
+      ['lai', 'Lãi dự kiến Fibo tối thiểu (%, 0 = bỏ)', 0, 'float'], ['catMax', 'Cắt lỗ tối đa (%)', 15, 'float'],
+      ['adx', 'ADX tuần tối thiểu (0 = tắt)', 25, 'float'], ['pha', 'Lọc pha thị trường VN (chỉ mua khi pha tốt, pha xấu bán hết)', true, 'bool'],
       ['vao', 'Tín hiệu vào (khung ngày)', '2MA hoặc MACD+Sto', 'sel', ['2MA hoặc MACD+Sto', '2MA', 'MACD+Sto']],
       ['phi', 'Phí mỗi chiều (%)', 0.15, 'float'], ['thue', 'Thuế khi bán (%)', 0.1, 'float']],
     calc(D, I) {
@@ -2933,6 +2933,10 @@ window.App = window.App || {};
       const dayTuan = j => { const w = tuanXong(j); if (w < 6) return null; const s = dayGanNhat(KW.B, w, 2, 52), san = c[j] * (1 - I.catMax / 100);
         return s != null && s < c[j] ? Math.max(s, san) : san; };
       const lai = I.lai / 100;
+      // pha thị trường VN tại từng ngày (window.GV_PHA: [ngày bắt đầu/ngày, pha, màu]); ngoài vùng có dữ liệu → không lọc
+      const phaTot = new Array(D.n).fill(null);
+      if (I.pha && (window.GV_PHA || []).length) { const P = window.GV_PHA; let q = -1;
+        for (let i = 0; i < D.n; i++) { while (q + 1 < P.length && Date.parse(P[q + 1][0]) / 1000 <= D.t[i]) q++; if (q >= 0) phaTot[i] = ['Tăng', 'Tích luỹ cuối', 'Tích luỹ'].includes(P[q][1]); } }
       const cuoiTuan = new Array(D.n).fill(false); for (let q = 0; q < KW.B.n - 1; q++) if (KW.cuoi[q] >= 0) cuoiTuan[KW.cuoi[q]] = true;
       // ADX(14) khung TUẦN của tuần đã xong gần nhất: xu hướng đủ mạnh (≥ ngưỡng) và DI+ > DI− (xu hướng tăng)
       const dmW = T.dmi(KW.B, 14, 14);
@@ -2940,29 +2944,29 @@ window.App = window.App || {};
       const fiboM = j => App.fiboSong(D, KM, j, c[j], 2, 1.0, true), fiboW = j => App.fiboSong(D, KW, j, c[j], 2, 1.0, true);
       const R = {
         vt(j) {
-          if (j < 30 || !P.dongPha[j] || !(c[j] > D.o[j])) return null;
+          if (j < 30 || !P.dongPha[j] || !(c[j] > D.o[j]) || phaTot[j] === false) return null;
           const ok = (I.vao !== 'MACD+Sto' && maLen(j)) || (I.vao !== '2MA' && (S.Mua1[j] || S.Mua2[j]));
           if (!ok) return null;
           if (!adxOk(j)) return null;
           // sóng tháng VÀ sóng tuần (đỉnh đã xác nhận, hồi ≥ 23,6%) đều cho lãi dự kiến ≥ lai; giá đã hồi về vùng hỗ trợ
           // (không cao hơn đáy hồi C + 50% đoạn C→B của sóng tuần) – không mua đuổi ở đỉnh
           const fM = fiboM(j), fW = fiboW(j);
-          if (!fM || !fW || fM.tp < c[j] * (1 + lai) || fW.tp < c[j] * (1 + lai)) { boQua.push({ i: j, ly: '<' + I.lai + '%' }); return null; }
-          if (c[j] > fW.C + 0.5 * (fW.B - fW.C)) { boQua.push({ i: j, ly: 'Chờ hồi' }); return null; }
-          const fb = fM.tp < fW.tp ? fM : fW;
+          if (lai > 0 && (!fM || !fW || fM.tp < c[j] * (1 + lai) || fW.tp < c[j] * (1 + lai))) { boQua.push({ i: j, ly: '<' + I.lai + '%' }); return null; }
+          if (fW && c[j] > fW.C + 0.5 * (fW.B - fW.C)) { boQua.push({ i: j, ly: 'Chờ hồi' }); return null; }
+          const fb = fM && fW ? (fM.tp < fW.tp ? fM : fW) : (fM || fW);
           const sl = dayTuan(j); if (sl == null) return null;
-          return { stop: sl, tp: fb.tp };
+          return { stop: sl, tp: fb ? fb.tp : null };
         },
         xn(j, fill) {
           if (!P.dongPha[j] || !(c[j] > D.o[j] && c[j] > fill)) return null;
           const ok = (I.vao !== 'MACD+Sto' && c[j] > ma[cap(j)[1]][j]) || (I.vao !== '2MA' && (S.XN1[j] || S.XN2[j] || S.XN3[j]));
           if (!ok) return null; const sl = dayTuan(j); return sl != null ? { stop: sl } : null;
         },
-        banPhan: null, banHet: i => P.banM[i], tenBan: 'Tín hiệu bán MACD+Sto tháng', veTp, tpChiVe: true,
+        banPhan: null, banHet: i => P.banM[i] || (phaTot[i] === false && phaTot[i - 1] !== false), tenBan: 'Tín hiệu bán tháng / pha thị trường xấu', veTp, tpChiVe: true,
         giuToiDa: (I.giu.startsWith('Dài') ? 3653 : 274) * 86400,
         // cắt lỗ theo GIÁ ĐÓNG CỬA: nến TUẦN đóng dưới mức cắt lỗ, hoặc giá đóng cửa ngày đã giảm ≥ catMax% so với giá mua → bán phiên sau
         catDong: (i, l) => (cuoiTuan[i] && c[i] < l.stop) || c[i] <= l.ep * (1 - I.catMax / 100),
-        note: `Dài hạn: vào khi Ngày + Tuần + Tháng đồng pha và có tín hiệu mua khung ngày (${I.vao}), CHỈ khi ADX tuần ≥ ${I.adx} với DI+ > DI−, lãi dự kiến tới Fibo 1,0 của CẢ sóng tháng và sóng tuần ≥ ${I.lai}% (đỉnh sóng đã xác nhận, hồi ≥ 23,6%) và giá đã hồi về vùng hỗ trợ (≤ C + 50% đoạn C→B sóng tuần). Không tự bán ở Fibo: giữ đến tín hiệu bán MACD+Sto khung THÁNG, tối đa ${I.giu.startsWith('Dài') ? '10 năm' : '9 tháng'}; cắt lỗ khi nến TUẦN đóng cửa dưới đáy sóng tuần (mức không xa quá ${I.catMax}%), hoặc giá đóng cửa ngày đã giảm ${I.catMax}% so với giá mua. Chấm xám = có tín hiệu mua nhưng bỏ qua (<${I.lai}%: lãi dự kiến thấp/chưa có sóng; Chờ hồi: giá đang xa vùng hỗ trợ). Kiểm định VN 2000–2026 (1 tỷ, ADX 25): trung hạn −1,3%/năm, dài hạn −0,1%/năm giai đoạn 2014–2026 – không hơn vào ngẫu nhiên; lọc pha thị trường +10,6%/năm. Chưa có lợi thế.`
+        note: `Dài hạn: vào khi Ngày + Tuần + Tháng đồng pha và có tín hiệu mua khung ngày (${I.vao}), ${I.pha ? 'chỉ khi pha thị trường VN tốt (pha xấu → bán hết), ' : ''}CHỈ khi ADX tuần ≥ ${I.adx} với DI+ > DI−, ${I.lai > 0 ? `lãi dự kiến tới Fibo 1,0 của CẢ sóng tháng và sóng tuần ≥ ${I.lai}% (đỉnh sóng đã xác nhận, hồi ≥ 23,6%), ` : ''}giá đã hồi về vùng hỗ trợ (≤ C + 50% đoạn C→B sóng tuần). Không tự bán ở Fibo: giữ đến tín hiệu bán MACD+Sto khung THÁNG, tối đa ${I.giu.startsWith('Dài') ? '10 năm' : '9 tháng'}; cắt lỗ khi nến TUẦN đóng cửa dưới đáy sóng tuần (mức không xa quá ${I.catMax}%), hoặc giá đóng cửa ngày đã giảm ${I.catMax}% so với giá mua. Chấm xám = có tín hiệu mua nhưng bỏ qua (<${I.lai}%: lãi dự kiến thấp/chưa có sóng; Chờ hồi: giá đang xa vùng hỗ trợ). Kiểm định VN 2000–2026 (1 tỷ, ADX 25): trung hạn −1,3%/năm, dài hạn −0,1%/năm giai đoạn 2014–2026 – không hơn vào ngẫu nhiên; lọc pha thị trường +10,6%/năm. Chưa có lợi thế.`
       };
       const r = moPhongLo(D, R, I);
       const bo = []; let truoc = -99;
@@ -2971,6 +2975,91 @@ window.App = window.App || {};
       r.draw = (g, X) => veTp.forEach(v => { const x1 = X.x(v.i), x2 = X.x(v.j != null ? v.j : D.n - 1); if (x1 == null || x2 == null) return;
         X.seg(g, x1, X.y(v.tp), x2, X.y(v.tp), '#089981', [5, 4], 1.5); X.label(g, x1 + 60, X.y(v.tp) - 9, 'Fibo 1,0 ' + App.fmtPrice(v.tp), '#089981'); });
       return r;
+    }
+  };
+
+  /* ======================================================================
+   * Coin / Forex — ĐỒNG PHA + ADX, LONG & SHORT đối xứng, mọi khung (15m, 1H, 4H, 1N, 1T).
+   * Phía SHORT = luật LONG áp lên chuỗi giá ĐẢO DẤU (mở/cao/thấp/đóng × −1) → đối xứng tuyệt đối.
+   * ====================================================================== */
+  const THANG_KHUNG = [900, 3600, 14400, 86400, 604800, 'M'];
+  function daoDau(D) { const bars = []; for (let i = 0; i < D.n; i++) bars.push({ time: D.t[i], open: -D.o[i], high: -D.l[i], low: -D.h[i], close: -D.c[i], volume: D.v[i] }); return T.prep(bars); }
+  function khungLon(D, buoc) {
+    const bars = []; for (let i = 0; i < D.n; i++) bars.push({ time: D.t[i], open: D.o[i], high: D.h[i], low: D.l[i], close: D.c[i], volume: D.v[i] });
+    const B = T.prep(buoc === 'M' ? App.aggregateMonth(bars) : App.aggregate(bars, buoc)), cuoi = new Array(B.n).fill(-1); let w = 0;
+    for (let i = 0; i < D.n; i++) { while (w + 1 < B.n && B.t[w + 1] <= D.t[i]) w++; cuoi[w] = i; }
+    return { B, cuoi };
+  }
+  // giá trị của nến khung lớn ĐÃ XONG gần nhất tại từng nến khung lệnh (nến khung lớn cuối cùng coi như chưa xong)
+  function theoNen(D, X, arr) { const out = new Array(D.n).fill(null); let j = -1;
+    for (let i = 0; i < D.n; i++) { while (j + 1 < X.B.n - 1 && X.cuoi[j + 1] <= i) j++; out[i] = j >= 0 && X.cuoi[j] <= i ? arr[j] : null; } return out; }
+  // sự kiện trên nến khung lớn → đánh dấu tại nến khung lệnh cuối cùng của nến đó
+  function suKien(D, X, arr) { const out = new Array(D.n).fill(false); for (let j = 0; j < X.B.n - 1; j++) if (arr[j] && X.cuoi[j] >= 0) out[X.cuoi[j]] = true; return out; }
+
+  DEFS.st_fx_ls = {
+    id: 'st_fx_ls', name: 'Coin/Forex — Đồng pha + ADX, Long & Short', cat: 'strategy', overlay: true, plots: [], levels: [],
+    inputs: [['huong', 'Hướng', 'Long và Short', 'sel', ['Long và Short', 'Chỉ Long', 'Chỉ Short']],
+      ['adx', 'ADX khung lớn kế tiếp tối thiểu (0 = tắt)', 25, 'float'],
+      ['loc', 'Lọc xu hướng chung', 'MA200 ngày của chính mã', 'sel', ['MA200 ngày của chính mã', 'Tắt']],
+      ['rr', 'Chốt lời cố định (R, 0 = không)', 0, 'float'], ['rui', 'Rủi ro mỗi lệnh (% vốn)', 1, 'float'], ['phi', 'Phí + spread mỗi chiều (%)', 0.03, 'float']],
+    calc(D, I) {
+      const tf = App.TF[App.state.tf] || 86400, k0 = THANG_KHUNG.indexOf(tf);
+      if (k0 < 0 || k0 > 4) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Long/Short: chọn khung 15p, 1g, 4g, 1N hoặc 1T', '#787b86'); } };
+      const lon = THANG_KHUNG.slice(k0 + 1, k0 + 3).map(b => khungLon(D, b)), Dn = daoDau(D);
+      const ben = Q => {   // các mảng cho 1 phía (Q = giá thật → Long, giá đảo dấu → Short)
+        const up = xuHuongTang(Q, 3), S = App.macdSto(Q), m5 = T.sma(Q.c, 5), m10 = T.sma(Q.c, 10);
+        const lonQ = lon.map(X => ({ cuoi: X.cuoi, B: Q === D ? X.B : daoDau(X.B) }));
+        const upLon = lonQ.map(X => theoNen(D, X, xuHuongTang(X.B, 2)));
+        const ban = suKien(D, lonQ[0], App.macdSto(lonQ[0].B).Ban);
+        const cat = j => { let ok = false; for (let x = Math.max(1, j - 2); x <= j; x++) { let deu = true; for (let q = x; q <= j; q++) if (!(m5[q] > m10[q])) deu = false; if (deu && !(m5[x - 1] > m10[x - 1])) ok = true; }
+          return ok && Q.c[j] > m5[j] && Q.c[j] > m10[j]; };
+        return { Q, vao: j => up[j] && upLon.every(u => u[j] === true) && Q.c[j] > Q.o[j] && (S.Mua1[j] || S.Mua2[j] || cat(j)), ban };
+      };
+      const L = ben(D), Sh = ben(Dn), atr = T.atr(D, 14);
+      const dm = T.dmi(lon[0].B, 14, 14), adx = theoNen(D, lon[0], dm.adx), pdi = theoNen(D, lon[0], dm.plus), mdi = theoNen(D, lon[0], dm.minus);
+      // MA200 NGÀY: khung ngày → MA200; khung tuần → MA40 tuần; khung nhỏ hơn ngày → (đóng cửa ngày đã xong − MA200 ngày)
+      let ma200 = null;
+      if (I.loc !== 'Tắt') {
+        if (tf >= 86400) ma200 = T.sma(D.c, tf === 86400 ? 200 : 40);
+        else { const X = khungLon(D, 86400), mm = theoNen(D, X, T.sma(X.B.c, 200)), cc = theoNen(D, X, X.B.c); ma200 = mm.map((v, i) => v == null || cc[i] == null || !isN(v) ? null : cc[i] - v); }
+      }
+      const chung = (i, s) => { if (!ma200) return true; const v = tf >= 86400 ? (isN(ma200[i]) ? D.c[i] - ma200[i] : null) : ma200[i]; return v == null || isN(v) && (s > 0 ? v > 0 : v < 0); };
+      const adxOk = (i, s) => !(I.adx > 0) || (adx[i] != null && adx[i] >= I.adx && (s > 0 ? pdi[i] > mdi[i] : mdi[i] > pdi[i]));
+      const dinhDay = (Q, j) => { const v = dayGanNhat(Q, j, 3, 60); return v == null ? null : v; };
+      const cap0 = (App.settings.bt || {}).capital || 10000, phi = I.phi / 100, n = D.n, trades = [], equity = [], mk = [];
+      let cash = cap0, pos = null, cho = null, peak = cap0, mdd = 0;
+      const dong = (i, px, why) => { const pnl = pos.s * (px - pos.ep) * pos.q - (pos.ep + px) * pos.q * phi; cash += pnl;
+        trades.push({ side: pos.s > 0 ? 'Mua' : 'Bán', ei: pos.ei, xi: i, ep: pos.ep, xp: px, pnl, pct: pos.s * (px / pos.ep - 1) * 100 - 2 * phi * 100, why });
+        mk.push({ i, pos: pos.s > 0 ? 'aboveBar' : 'belowBar', shape: pos.s > 0 ? 'arrowDown' : 'arrowUp', color: why === 'Cắt lỗ' ? '#f23645' : '#ff9800', text: why === 'Cắt lỗ' ? 'Cắt lỗ' : 'Đóng ' + (pos.s > 0 ? 'Long' : 'Short') }); pos = null; };
+      for (let i = 0; i < n; i++) {
+        const o = D.o[i];
+        if (cho && cho.k === 'dong' && pos) dong(i, o, cho.why);
+        else if (cho && cho.k === 'mo' && !pos && (cho.s > 0 ? o > cho.stop : o < cho.stop)) {
+          const q = cash * I.rui / 100 / Math.abs(o - cho.stop);
+          pos = { s: cho.s, ep: o, q, stop: cho.stop, tp: I.rr > 0 ? o + cho.s * I.rr * Math.abs(o - cho.stop) : null, ei: i };
+          mk.push({ i, pos: cho.s > 0 ? 'belowBar' : 'aboveBar', shape: cho.s > 0 ? 'arrowUp' : 'arrowDown', color: cho.s > 0 ? '#2962ff' : '#e91e63', text: cho.s > 0 ? 'Long' : 'Short' });
+        }
+        cho = null;
+        if (pos && (pos.s > 0 ? D.l[i] < pos.stop : D.h[i] > pos.stop)) dong(i, pos.s > 0 ? Math.min(o, pos.stop) : Math.max(o, pos.stop), 'Cắt lỗ');
+        if (pos && pos.tp && (pos.s > 0 ? D.h[i] >= pos.tp : D.l[i] <= pos.tp)) dong(i, pos.s > 0 ? Math.max(o, pos.tp) : Math.min(o, pos.tp), 'Chốt lời');
+        if (i < n - 1 && i > 30) {
+          if (pos) { const bS = pos.s > 0 ? L.ban[i] : Sh.ban[i];
+            if (bS) cho = { k: 'dong', why: 'Tín hiệu ngược khung lớn' }; else if (!chung(i, pos.s)) cho = { k: 'dong', why: 'Xu hướng chung đảo' }; }
+          else for (const [s, B_] of [[1, L], [-1, Sh]]) {
+            if ((s > 0 && I.huong === 'Chỉ Short') || (s < 0 && I.huong === 'Chỉ Long')) continue;
+            if (!B_.vao(i) || !adxOk(i, s) || !chung(i, s)) continue;
+            let st = dinhDay(B_.Q, i); if (st == null) continue; st = s > 0 ? Math.max(st, D.c[i] - 3 * atr[i]) : Math.min(-st, D.c[i] + 3 * atr[i]);
+            if (s > 0 ? st < D.c[i] : st > D.c[i]) { cho = { k: 'mo', s, stop: st }; break; }
+          }
+        }
+        const eq = cash + (pos ? pos.s * (D.c[i] - pos.ep) * pos.q : 0); equity.push(eq); peak = Math.max(peak, eq); mdd = Math.max(mdd, (peak - eq) / peak * 100);
+      }
+      if (pos) dong(n - 1, D.c[n - 1], 'Đang mở');
+      const wins = trades.filter(t => t.pnl > 0), gp = wins.reduce((a, t) => a + t.pnl, 0), gl = -trades.filter(t => t.pnl <= 0).reduce((a, t) => a + t.pnl, 0);
+      const ten = THANG_KHUNG.slice(k0 + 1, k0 + 3).map(b => ({ 3600: '1H', 14400: '4H', 86400: 'D', 604800: 'W', M: 'M' })[b]).join(' + ');
+      return { markers: mk, backtest: { trades, equity, net: cash - cap0, netPct: (cash / cap0 - 1) * 100, n: trades.length, winRate: trades.length ? wins.length / trades.length * 100 : 0,
+        pf: gl ? gp / gl : gp ? Infinity : 0, mdd, avg: trades.length ? (cash - cap0) / trades.length : 0, buyHold: (D.c[n - 1] / D.c[0] - 1) * 100,
+        note: `Long khi khung đang xem + ${ten} cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD > tín hiệu, Sto 13-13-5 %K > %D), ADX khung ${ten.split(' ')[0]} ≥ ${I.adx} với DI+ > DI−, nến tăng + MACD+Sto Mua1/Mua2 hoặc MA5 cắt lên MA10. Short = đối xứng tuyệt đối. Cắt lỗ đỉnh/đáy gần nhất (tối đa 3 ATR), rủi ro ${I.rui}% vốn/lệnh; thoát khi khung ${ten.split(' ')[0]} có tín hiệu MACD+Sto ngược chiều${I.loc !== 'Tắt' ? ' hoặc giá cắt MA200 ngày ngược hướng' : ''}. Backtest toàn bộ (lọc BTC/DXY) xem co_phieu/nghien_cuu.` } };
     }
   };
 
@@ -4329,7 +4418,7 @@ window.App = window.App || {};
       else if (cur === 'pattern') {
         h = '<div class="isec">Mô hình biểu đồ</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'chart').map(row).join('')
           + '<div class="isec">Mô hình nến</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'candle').sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
-      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dong_pha', 'sp_dinh_day', 'st_daihan', 'st_dongpha', 'st_level1', 'st_macdsto', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
+      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dong_pha', 'sp_dinh_day', 'st_daihan', 'st_fx_ls', 'st_dongpha', 'st_level1', 'st_macdsto', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
       else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
       else h = all.filter(d => d.cat === cur).sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
       $('#iList').innerHTML = h;
