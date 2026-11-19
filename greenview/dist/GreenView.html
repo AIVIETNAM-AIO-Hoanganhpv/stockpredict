@@ -2439,8 +2439,9 @@ window.App = window.App || {};
       P.forEach(([t, pha, mau]) => {
         const ts = Date.parse(t) / 1000, i = idx(D, ts); if (i < 0) return;
         const s = seg[seg.length - 1];
-        if (s && s.pha === pha) s.j = i; else seg.push({ i, j: i, pha, mau });
+        if (s && s.pha === pha) s.j = i; else { if (s) s.j = Math.max(s.j, i - 1); seg.push({ i, j: i, pha, mau }); }
       });
+      if (seg.length) seg[seg.length - 1].j = D.n - 1;   // dữ liệu có thể chỉ ghi ngày ĐỔI pha → kéo mỗi đoạn tới ngày đổi kế tiếp
       const a = Math.max(0, Math.min(100, I.op)) / 100, hex = c => { const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
       const cuoi = P[P.length - 1];
       return { draw(g, X) {
@@ -2936,7 +2937,7 @@ window.App = window.App || {};
       // pha thị trường VN tại từng ngày (window.GV_PHA: [ngày bắt đầu/ngày, pha, màu]); ngoài vùng có dữ liệu → không lọc
       const phaTot = new Array(D.n).fill(null);
       if (I.pha && (window.GV_PHA || []).length) { const P = window.GV_PHA; let q = -1;
-        for (let i = 0; i < D.n; i++) { while (q + 1 < P.length && Date.parse(P[q + 1][0]) / 1000 <= D.t[i]) q++; if (q >= 0) phaTot[i] = ['Tăng', 'Tích luỹ cuối', 'Tích luỹ'].includes(P[q][1]); } }
+        for (let i = 0; i < D.n; i++) { while (q + 1 < P.length && Date.parse(P[q + 1][0]) / 1000 <= D.t[i]) q++; if (q >= 0) phaTot[i] = P[q][3] != null ? !!P[q][3] : ['Tăng', 'Tích luỹ cuối', 'Tích luỹ'].includes(P[q][1]); } }
       const cuoiTuan = new Array(D.n).fill(false); for (let q = 0; q < KW.B.n - 1; q++) if (KW.cuoi[q] >= 0) cuoiTuan[KW.cuoi[q]] = true;
       // ADX(14) khung TUẦN của tuần đã xong gần nhất: xu hướng đủ mạnh (≥ ngưỡng) và DI+ > DI− (xu hướng tăng)
       const dmW = T.dmi(KW.B, 14, 14);

@@ -165,12 +165,24 @@ def khoa_twelvedata() -> str:
 
 
 def _pha_thi_truong() -> list:
-    """Lịch sử pha thị trường từ bản quét gần nhất (bao_cao/chu_ky.json): [[ngày, pha, màu], ...]."""
+    """Lịch sử pha thị trường [[ngày, pha, màu, tốt], ...]: bản quét gần nhất (bao_cao/chu_ky.json, ~500 phiên) nối sau
+    lịch sử dài từ 2000 (bao_cao/pha_lich_su.json – chỉ các ngày đổi pha, tính lại khi kiểm định)."""
     import os
     from . import chu_ky
     thu_muc = Path(os.environ.get("CO_PHIEU_BAO_CAO", GOC / "co_phieu" / "bao_cao"))
     ck = chu_ky.doc(thu_muc)
-    return [[x["t"], x["pha"], chu_ky.MAU_PHA.get(x["pha"], "#999")] for x in ck.get("lich_su", [])]
+    gan = [[x["t"], x["pha"], chu_ky.MAU_PHA.get(x["pha"], "#999"), bool(x.get("tot", x["pha"] in chu_ky.PHA_TOT))]
+           for x in ck.get("lich_su", [])]
+    dai = []
+    f = thu_muc / "pha_lich_su.json"
+    if f.exists():
+        try:
+            dau = gan[0][0] if gan else "9999"
+            dai = [[t, p, chu_ky.MAU_PHA.get(p, "#999"), bool(tot)] for t, p, tot in json.loads(f.read_text(encoding="utf-8"))
+                   if t < dau]
+        except Exception:
+            dai = []
+    return dai + gan
 
 
 def html_nhung(du_lieu_goi: dict | None = None, api: str | None = None, td_key: str | None = None) -> str:

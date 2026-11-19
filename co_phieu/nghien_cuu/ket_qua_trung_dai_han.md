@@ -152,3 +152,66 @@ out 2026-03-04 (Cắt lỗ); GMD in 2026-03-30 → still open on 2026-11-19. The
   - v3 10 years: stop 63 %, monthly sell 35 %.
 
 Excel: new sheets `v3 cat lo dong cua - tung ma` and `v3 cat lo dong cua - lenh`. The other sheets now include v3 rows. All v3 tables are in `tables.md`.
+
+---
+
+## v4 = market phase as the main rule (added 2026-11-19, user's choice). Code: `v4prep.py`, `v4.py`, `v4report.py`, `phase.py`; all tables in `tables_v4.md`
+Rules:
+- **Phase gate.** Use the VN market phase from the phase-filter benchmark, recomputed from 2000. When the phase is bad, sell everything at the next open and buy nothing.
+- **Candidates** on a good-phase day, all of these:
+  - đồng pha D/W/M;
+  - weekly ADX(14) ≥ 25 with DI+ > DI− (also tested: off, 20, 30);
+  - liquidity ≥ 1 bn VND per day;
+  - a stop level exists.
+  - The ≥ 10 % Fibo condition is dropped.
+- **Variants:**
+  - (a) also the daily trigger (2MA or Mua1/Mua2) on a bullish candle;
+  - (b) = (a) plus the v2 "chờ hồi" pullback rule when a strict weekly wave exists;
+  - (c) no daily trigger.
+- **Sizing.** N = 5 or 10 names, equal weight (equity ÷ N at the open), one lot per stock. Free slots are filled at the next open from candidates ranked by 6-month return or by weekly ADX. The ranking was picked on TRAIN by Sharpe.
+- **Exits** (at the next open):
+  - monthly MACD+Sto sell;
+  - v3 closing stop (weekly close below the stop, or daily close ≤ fill × 0.85);
+  - max hold 274 days or 3,653 days.
+- Fees as before; 1 bn VND.
+
+**Verdict.**
+- **The market phase does the work, not the stock rules.**
+- **No v4 setting beats the plain phase filter** (hold the equal-weight liquid basket when the phase is good): TEST +10.6 %/yr, max drawdown −28 %, FULL +11.1 %/yr.
+- **The user's setting, (a) ADX 25:** TEST +5.4 %/yr (N 5) and +5.2 %/yr (N 10); FULL +2.0 % and +1.6 %/yr; TRAIN −1.2 % and −1.7 %/yr. Random picks from the same pool do the same or better (42 % and 83 % of 200 runs ≥ real).
+- **(b) with the pullback rule is worse:** TEST +0.5 % (N 5) and +2.3 % (N 10).
+- **(c) without the daily trigger is the best v4:** TEST +8.4 % (N 5) and +11.2 % (N 10); FULL +6.1 % and +6.7 %; TRAIN +4.0 % and +2.6 %. Max drawdown is −36 % / −40 %.
+  - It is still below the phase filter on FULL (+11.1 %) and has a deeper drawdown.
+  - Against random picks from the same pool it is borderline: 7.5 % of runs beat it in TEST (N 10), 9.5 % on FULL, but 56 % in TRAIN. So it is not a reliable stock-picking edge.
+- **Why the stock rules barely matter:**
+  - The gate flips about 15 times a year, so the average holding is only 16–20 days. The 9-month and 10-year versions are therefore identical: max hold, and almost never the monthly sell, is ever reached.
+  - With the daily trigger, the pool averages 1 candidate per good day (median 0), so N slots are rarely full. The portfolio is invested only 15–19 % of the time, against 37 % for the phase filter.
+- **ADX threshold:** no clear effect. For (c) N 10, TEST is: off +14.2 %, 20 +12.2 %, 25 +11.2 %, 30 +10.9 %. Turning ADX off is the best, and TRAIN agrees (+5.2 %).
+- **Concentration (FULL):**
+  - (a) N 5 without SHS: TEST +4.0 %.
+  - (c) N 10 without CTP: TEST +10.0 %, FULL +6.2 %.
+  - Top-5 contributors for (c) N 10: CTP, L40, HID, APS, VOS.
+- **Per year, (c) N 10 vs the phase filter:**
+  - 2021: +76 % vs +56 %.
+  - 2022: −9 % vs +6 %.
+  - 2023: −23 % vs +7 %.
+  - 2024: +53 % vs +11 %.
+  - 2025: +43 % vs +20 %.
+
+| strategy (ADX 25, TRAIN-picked ranking) | TRAIN | **TEST** | FULL | TEST max DD | FULL max DD | random runs ≥ real (TEST) |
+|---|---|---|---|---|---|---|
+| v4 (a) daily trigger, N 5 | −1.2 % | **+5.4 %** | +2.0 % | −34 % | −35 % | 42 % |
+| v4 (a) daily trigger, N 10 | −1.7 % | **+5.2 %** | +1.6 % | −23 % | −31 % | 83 % |
+| v4 (b) + pullback rule, N 10 | +0.1 % | +2.3 % | +1.2 % | −29 % | −29 % | 31 % |
+| v4 (c) no trigger, N 5 | +4.0 % | +8.4 % | +6.1 % | −36 % | −36 % | 26 % |
+| v4 (c) no trigger, N 10 | +2.6 % | +11.2 % | +6.7 % | −40 % | −40 % | 7.5 % |
+| phase filter + EW basket | +11.5 % | **+10.6 %** | +11.1 % | −28 % | −38 % | |
+| EW buy & hold | −8.4 % | +7.3 % | −1.0 % | −59 % | −88 % | |
+
+**Phase series for GreenView:**
+- `pha_2000.json` holds [date, phase] at each change point, 516 changes from 2000-07-28 to 2026-10-29.
+  - Phase names are the same as `co_phieu/dudoan/chu_ky.py`: "Tăng", "Tích luỹ cuối", "Tích luỹ", "Phân phối", "Giảm".
+  - "Good" (nên cầm cổ phiếu) = Tăng, Tích luỹ cuối or Tích luỹ (`PHA_TOT`), except when the US 10-year yield rose more than 0.75 points in 3 months. That exception covers 5 % of days, and no yield data exists before 2005.
+  - Because of that exception the phase name alone does not decide "good". `pha_2000_tot.json` gives [date, phase, tot] at every change of either.
+- **Caveat:** before 2006 no stock passes the liquidity filter, so the index is flat and the phase is "Giảm" until 2006-03.
+- Excel: new sheets `v4 pha thi truong - tong hop`, `v4 so voi ngau nhien`, `v4 theo nam`, `v4 danh sach lenh`.
