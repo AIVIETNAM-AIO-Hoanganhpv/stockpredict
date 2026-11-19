@@ -135,3 +135,17 @@ def test_tin_kinh_te_va_chu_de(gia_gia):
         assert not at.exception, (nhom, at.exception)
     at.radio(key="tin_cd").set_value("Giá vàng").run()
     assert not at.exception, at.exception
+
+
+def test_tab_theo_ngay(gia_gia):
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=180).run()
+    assert not at.exception, at.exception
+    if LS_CO_BAN():
+        for che_do in ("🔁 Thay đổi so với phiên trước", "🗓 Lịch sắp tới", "📜 Lịch sử khuyến nghị"):
+            at.radio(key="xem_ngay").set_value(che_do).run()
+            assert not at.exception, (che_do, at.exception)
+
+
+def LS_CO_BAN():
+    from dudoan import lich_su
+    return bool(lich_su.ds_ngay())

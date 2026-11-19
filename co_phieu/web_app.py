@@ -14,7 +14,7 @@ import streamlit as st
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, co_ban as CB, du_lieu, khuyen_nghi as K, quet, tin_tuc as TT  # noqa: E402
+from dudoan import bao_cao, co_ban as CB, du_lieu, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -190,6 +190,10 @@ def quet_ngay(kho, san, gtgd_min):
                **{t: quet.bang(kq, t) for t in ("D", "W")},
                **{f"ban_{t}": quet.bang_ban(kq, t) for t in ("D", "W")},
                **{f"nganh_{t}": quet.suc_manh_nganh(kq, t) for t in ("D", "W")})
+    try:
+        quet.ghi(HERE / "bao_cao", kq)            # cũng lưu bản khuyến nghị của ngày (tab "Theo ngày")
+    except Exception:
+        pass
     thanh.empty()
 
 
@@ -438,8 +442,8 @@ with st.expander("⚙ Cài đặt chung", expanded=False):
                           step=10_000_000, format="%d")
 tam = TAM[tam_nhan]
 
-tab0, tab_loc, tab1, tab_tin, tab2, tab3 = st.tabs(["🏆 Khuyến nghị", "🔎 Bộ lọc", "🔍 Tra cứu", "📰 Tin thị trường",
-                                                    "💼 Danh mục", "📋 Theo dõi"])
+tab0, tab_ngay, tab_loc, tab1, tab_tin, tab2, tab3 = st.tabs(
+    ["🏆 Khuyến nghị", "📅 Theo ngày", "🔎 Bộ lọc", "🔍 Tra cứu", "📰 Tin thị trường", "💼 Danh mục", "📋 Theo dõi"])
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
 
 with tab0:
@@ -588,6 +592,91 @@ with tab1:
                 the_tin_hieu_dinh(K.tin_hieu_dinh(kq, khung_dinh, loai=kq.loai))
         if kq is not None:
             chi_tiet(kq, tl, "tra_cuu")
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def gia_ngay(ma):
+    return du_lieu.tai(ma, "D")
+
+
+def tim_ngay():
+    return LS.ds_ngay(HERE / "bao_cao" / "lich_su")
+
+
+with tab_ngay:
+    ngay_co = tim_ngay()
+    if not ngay_co:
+        st.info("Chưa có bản khuyến nghị nào được lưu. Mỗi lần quét toàn thị trường (lịch GitHub hằng ngày sau 15h, "
+                "hoặc nút Quét ở tab Khuyến nghị) sẽ lưu một bản theo ngày.")
+    else:
+        xem_ngay = st.radio("Xem", ["📜 Lịch sử khuyến nghị", "🔁 Thay đổi so với phiên trước", "🗓 Lịch sắp tới"],
+                            horizontal=True, key="xem_ngay", label_visibility="collapsed")
+        if xem_ngay.startswith("📜"):
+            ngay = st.selectbox("Ngày", ngay_co, format_func=lambda d: pd.Timestamp(d).strftime("%d/%m/%Y (%A)")
+                                .replace("Monday", "Thứ 2").replace("Tuesday", "Thứ 3").replace("Wednesday", "Thứ 4")
+                                .replace("Thursday", "Thứ 5").replace("Friday", "Thứ 6").replace("Saturday", "Thứ 7")
+                                .replace("Sunday", "CN"), key="ls_ngay")
+            ban = LS.doc_ngay(ngay, HERE / "bao_cao" / "lich_su")
+            st.caption(f"Bản quét lúc {ban.get('luc')} · tầm {'ngắn hạn (D)' if tam == 'D' else 'trung hạn (W)'} "
+                       "(đổi ở ⚙ Cài đặt chung)")
+            loai = st.radio("Danh sách", ["Nên mua", "Bán ở đỉnh"], horizontal=True, key="ls_loai")
+            with st.spinner("Đang tính hiệu quả đến nay…"):
+                if loai == "Nên mua":
+                    b = LS.hieu_qua_mua(ban.get(f"mua_{tam}", []), ngay, gia_ngay)
+                else:
+                    b = LS.hieu_qua_ban(ban.get(f"ban_{tam}", []), ngay, gia_ngay)
+            if b.empty:
+                st.info("Ngày này không có mã nào trong danh sách.")
+            else:
+                if loai == "Nên mua":
+                    dem = b["Trạng thái"].value_counts()
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Đã chạm chốt lời", int(dem.get("Đã chạm chốt lời", 0)))
+                    c2.metric("Đã cắt lỗ", int(dem.get("Đã cắt lỗ", 0)))
+                    c3.metric("Đang giữ", int(dem.get("Đang giữ", 0)))
+                    c4.metric("Chưa khớp", int(sum(v for k, v in dem.items() if k.startswith("Chưa"))))
+                    cot = [c for c in ["Mã", "Khuyến nghị", "Trạng thái", "Lãi/lỗ %", "Giá", "Giá mua", "Cắt lỗ",
+                                       "Chốt lời", "Dự kiến chốt lời", "Ngày khớp", "Ngày đóng", "Ngành"] if c in b]
+                else:
+                    cot = [c for c in ["Mã", "Tín hiệu", "Số dấu hiệu", "Giá", "Thay đổi từ hôm đó %", "Đánh giá",
+                                       "Vùng bán", "Ngành"] if c in b]
+
+                def mau_lai(v):
+                    return "" if v is None or pd.isna(v) else ("color:#16a34a" if v > 0 else "color:#dc2626")
+                cot_lai = [c for c in ("Lãi/lỗ %", "Thay đổi từ hôm đó %") if c in cot]
+                st.dataframe(b[cot].style.map(mau_lai, subset=cot_lai).format(
+                    {"Giá": "{:,.0f}", "Giá mua": "{:,.0f}", "Cắt lỗ": "{:,.0f}", "Chốt lời": "{:,.0f}",
+                     "Lãi/lỗ %": "{:+.1f}%", "Thay đổi từ hôm đó %": "{:+.1f}%"}, na_rep="–"),
+                    hide_index=True, width="stretch", height=480)
+        elif xem_ngay.startswith("🔁"):
+            if len(ngay_co) < 2:
+                st.info(f"Mới có 1 bản (ngày {pd.Timestamp(ngay_co[0]):%d/%m/%Y}). Cần ít nhất 2 ngày để so sánh.")
+            else:
+                c1, c2 = st.columns(2)
+                a = c1.selectbox("Ngày", ngay_co, index=0, key="ss_a")
+                bb = c2.selectbox("So với", ngay_co, index=1, key="ss_b")
+                ss = LS.so_sanh(LS.doc_ngay(a, HERE / "bao_cao" / "lich_su"), LS.doc_ngay(bb, HERE / "bao_cao" / "lich_su"), tam)
+                for ten, k in (("Mua / Mua mạnh", "mua"), ("Chờ về vùng mua", "cho"), ("Bán ở đỉnh", "ban")):
+                    x = ss[k]
+                    st.markdown(f"##### {ten}")
+                    st.markdown("🟢 **Mới vào:** " + (", ".join(f"`{r['Mã']}`" for r in x["moi_vao"]) or "–")
+                                + "  \n🔴 **Bị loại:** " + (", ".join(f"`{r['Mã']}`" for r in x["bi_loai"]) or "–")
+                                + f"  \n⚪ Giữ nguyên: {len(x['giu_nguyen'])} mã")
+        else:
+            moi = LS.doc_ngay(ngay_co[0], HERE / "bao_cao" / "lich_su")
+            dm_ma = []
+            if "dm" in st.session_state:
+                dm_ma = [str(m).strip().upper() for m in st.session_state["dm"].get("Mã", []) if str(m).strip()]
+            mua = [r for r in moi.get(f"mua_{tam}", []) if (r.get("Hạng") or 0) >= 3]
+            ds = dm_ma + [m for m in mac_dinh if du_lieu.phan_loai(m)[0] == "vn" and m not in du_lieu.CHI_SO_VN] \
+                + [r["Mã"] for r in mua]
+            so_ngay = st.slider("Trong bao nhiêu ngày tới", 7, 90, 30, key="lich_ngay")
+            with st.spinner("Đang lấy lịch sự kiện…"):
+                lich = LS.lich_sap_toi(ds, mua, so_ngay)
+            st.caption("Gồm: cổ tức, ĐHCĐ, phát hành… của các mã đang giữ / theo dõi / nên mua, và ngày dự kiến chốt lời.")
+            if lich.empty:
+                st.info("Không có sự kiện nào trong khoảng này.")
+            else:
+                st.dataframe(lich, hide_index=True, width="stretch", height=480)
 
 with tab_loc:
     kho = kho_thi_truong()

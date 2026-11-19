@@ -294,4 +294,6 @@ def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
             **{f"nganh_{tam}": json.loads(nganhs[tam].to_json(orient="records", force_ascii=False))
                for tam in ("D", "W")}}
     (thu_muc / "thi_truong.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    from . import lich_su
+    lich_su.luu_ngay(data, thu_muc=thu_muc / "lich_su")      # lưu bản khuyến nghị của ngày hôm nay
     return data
