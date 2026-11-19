@@ -25,7 +25,7 @@ CHI_SO_VN = {"VNINDEX", "VN30", "HNXINDEX", "HNX30", "UPCOMINDEX", "HNX", "UPCOM
 KHUNG = {
     "vn": ["M", "W", "D"],
     "intl": ["M", "W", "D"],
-    "fx": ["W", "D", "4H", "1H", "15m"],
+    "fx": ["M", "W", "D", "4H", "1H", "15m"],
 }
 
 # Hàng hoá trên Yahoo (giá vàng/bạc giao ngay không ổn định → dùng hợp đồng tương lai)

@@ -16,7 +16,10 @@ from dataclasses import dataclass
 from . import chi_bao, du_lieu
 
 KHUNG_GD = "4H"            # khung giao dịch mặc định cho forex
-KHUNG_LON = {"4H": "D", "1H": "4H", "15m": "1H", "D": "W"}
+KHUNG_LON = {"15m": "1H", "1H": "4H", "4H": "D", "D": "W", "W": "M", "M": None}
+KHUNG_THU_TU = ["15m", "1H", "4H", "D", "W", "M"]
+TAM_GIU = {"15m": "vài giờ", "1H": "1–3 ngày", "4H": "vài ngày – 2 tuần", "D": "vài tuần", "W": "vài tháng",
+           "M": "nhiều tháng"}
 SL_ATR = 0.5
 TP_R = 3.0
 SL_MAX_ATR = 3.0         # cắt lỗ xa hơn 3 ATR thì dùng 1,5 ATR (giữ khối lượng hợp lý)
@@ -114,7 +117,8 @@ def ke_hoach_fx(kq, von_usd: float = 10_000, rui_ro_pct: float = 1.0, rui_ro_toi
     gia = float(df["close"].iloc[-1])
     atr = float(chi_bao.atr(df).iloc[-1])
     ts = thong_so(kq.ma)
-    xh, xl = kqk.xu_huong, (lon.xu_huong if lon else 0)
+    xh = kqk.xu_huong
+    xl = lon.xu_huong if lon else xh      # khung tháng: không có khung lớn hơn để lọc
     if xh == 1 and xl >= 0:
         huong = "MUA (Buy)"
     elif xh == -1 and xl <= 0:
@@ -122,10 +126,18 @@ def ke_hoach_fx(kq, von_usd: float = 10_000, rui_ro_pct: float = 1.0, rui_ro_toi
     else:
         huong = None
     sw = sorted(kqk.cau_truc.swings, key=lambda s: s.i) if kqk.cau_truc else []
+    gan_ = sw[-8:]
+    ho_tro = max([s.price for s in gan_ if s.kind == "L" and s.price < gia], default=None)
+    khang_cu = min([s.price for s in gan_ if s.kind == "H" and s.price > gia], default=None)
     if huong is None:
-        ly = (f"Khung {khung} {'tăng' if xh == 1 else 'giảm' if xh == -1 else 'đi ngang'}, khung {ten_lon} "
-              f"{'tăng' if xl == 1 else 'giảm' if xl == -1 else 'đi ngang'} → không rõ hướng, đứng ngoài.")
-        return {"huong": None, "gia": gia, "khung": khung, "ly_do": ly, "atr": atr, "thong_so": ts}
+        ly = (f"Khung {khung} {'tăng' if xh == 1 else 'giảm' if xh == -1 else 'đi ngang'}"
+              + (f", khung {ten_lon} {'tăng' if xl == 1 else 'giảm' if xl == -1 else 'đi ngang'}" if lon else "")
+              + " → không rõ hướng, đứng ngoài.")
+        if ho_tro or khang_cu:
+            ly += (" Tham khảo khi đi ngang: " + (f"mua gần hỗ trợ {ho_tro:,.5g}" if ho_tro else "")
+                   + (", " if ho_tro and khang_cu else "") + (f"bán gần kháng cự {khang_cu:,.5g}" if khang_cu else "") + ".")
+        return {"huong": None, "gia": gia, "khung": khung, "ly_do": ly, "atr": atr, "thong_so": ts,
+                "ho_tro": ho_tro, "khang_cu": khang_cu}
     mua = huong.startswith("MUA")
     gan = sw[-8:]                                   # 8 đỉnh/đáy gần nhất
     if mua:
@@ -152,7 +164,25 @@ def ke_hoach_fx(kq, von_usd: float = 10_000, rui_ro_pct: float = 1.0, rui_ro_toi
         "sl_pip": sl_pip, "tp_pip": tp_pip, "rr": TP_R, "lot": kl["lot"], "don_vi": kl["don_vi"],
         "lai_usd": tp_pip * pv - chi_phi, "lo_usd": -(sl_pip * pv + chi_phi), "gia_tri_pip": pv,
         "khoi_luong": kl, "thong_so": ts,
-        "ly_do": (f"Khung {khung} {'tăng' if mua else 'giảm'} (điểm {kqk.diem:+.0f}), khung {ten_lon} "
-                  f"{'tăng' if xl == 1 else 'giảm' if xl == -1 else 'đi ngang'}. Cắt lỗ {ly_sl}; chốt lời = "
+        "ho_tro": ho_tro, "khang_cu": khang_cu,
+        "ly_do": (f"Khung {khung} {'tăng' if mua else 'giảm'} (điểm {kqk.diem:+.0f})"
+                  + (f", khung {ten_lon} {'tăng' if xl == 1 else 'giảm' if xl == -1 else 'đi ngang'}" if lon else "")
+                  + f". Cắt lỗ {ly_sl}; chốt lời = "
                   f"{TP_R:g} × khoảng cắt lỗ. CHƯA kiểm định riêng cho forex."),
     }
+
+
+def ke_hoach_cac_khung(kq, von_usd: float = 10_000, rui_ro_pct: float = 1.0, rui_ro_toi_da_usd: float = 0.0) -> list[dict]:
+    """Kế hoạch Mua/Bán cho từng khung 15m → 1H → 4H → D → W → M (khung nào thiếu dữ liệu thì bỏ qua)."""
+    ra = []
+    for k in KHUNG_THU_TU:
+        if k not in kq.frames:
+            continue
+        try:
+            kh = ke_hoach_fx(kq, von_usd, rui_ro_pct, rui_ro_toi_da_usd, khung=k)
+        except Exception as e:
+            kh = {"huong": None, "khung": k, "ly_do": str(e)[:100]}
+        kh["khung"] = k
+        kh["tam_giu"] = TAM_GIU[k]
+        ra.append(kh)
+    return ra

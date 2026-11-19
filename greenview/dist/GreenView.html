@@ -4545,6 +4545,8 @@ window.App = window.App || {};
   App.state = { src: 'BINANCE', sym: 'BTCUSDT', tf: '1h', bars: [], loading: false, noMore: false, token: 0 };
   App.settings = Object.assign({ tdKey: '', proxy: '', chart: {}, bt: { capital: 10000, fee: 0.04 } }, App.store.get('settings', {}));
   App.saveSettings = () => App.store.set('settings', App.settings);
+  // Key Twelve Data do StockPredict đưa vào (file khoa_twelvedata.txt trên máy) – chỉ điền khi chưa có
+  if (window.GV_TD_KEY && !App.settings.tdKey) { App.settings.tdKey = window.GV_TD_KEY; App.saveSettings(); }
 
   App.setStatus = function (kind, text) { $('#stDot').className = 'dot ' + kind; $('#stText').textContent = text; };
   setInterval(() => { const d = new Date(), p = n => String(n).padStart(2, '0'); $('#clock').textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} (UTC${App.TZ >= 0 ? '+' : ''}${App.TZ / 3600})`; }, 1000);

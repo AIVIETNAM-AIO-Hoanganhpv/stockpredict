@@ -3,3 +3,6 @@ __pycache__/
 .pytest_cache/
 co_phieu/du_lieu_ma/cache/
 co_phieu/danh_muc.csv
+co_phieu/khoa_twelvedata.txt
+.streamlit/secrets.toml
+co_phieu/.streamlit/secrets.toml

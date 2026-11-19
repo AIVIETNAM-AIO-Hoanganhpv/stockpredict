@@ -144,10 +144,33 @@ def goi_du_lieu(ma: str, df: pd.DataFrame | None = None, qua_khu: bool = True, s
     return goi
 
 
-def html_nhung(du_lieu_goi: dict | None = None, api: str | None = None) -> str:
-    """GreenView kèm dữ liệu (`window.GV_DATA`) và/hoặc địa chỉ máy chủ giá (`window.GV_API`)."""
+FILE_KHOA_TD = GOC / "co_phieu" / "khoa_twelvedata.txt"   # KHÔNG đưa lên git (.gitignore)
+
+
+def khoa_twelvedata() -> str:
+    """API key Twelve Data (forex, cổ phiếu Mỹ trong GreenView): biến môi trường TWELVEDATA_API_KEY,
+    secrets của Streamlit, hoặc file co_phieu/khoa_twelvedata.txt trên máy. Không có thì trả về ""."""
+    import os
+    k = os.environ.get("TWELVEDATA_API_KEY", "").strip()
+    if not k:
+        try:
+            import streamlit as st
+            k = str(st.secrets.get("TWELVEDATA_API_KEY", "")).strip()
+        except Exception:
+            k = ""
+    if not k and FILE_KHOA_TD.exists():
+        dong = FILE_KHOA_TD.read_text(encoding="utf-8-sig").split()
+        k = dong[0].strip() if dong else ""
+    return k if k.isalnum() else ""
+
+
+def html_nhung(du_lieu_goi: dict | None = None, api: str | None = None, td_key: str | None = None) -> str:
+    """GreenView kèm dữ liệu (`window.GV_DATA`), địa chỉ máy chủ giá (`window.GV_API`) và key Twelve Data."""
     html = FILE_GV.read_text(encoding="utf-8")
     cau_hinh = "<script>"
+    k = khoa_twelvedata() if td_key is None else td_key
+    if k:
+        cau_hinh += "window.GV_TD_KEY=" + json.dumps(k) + ";"
     if du_lieu_goi is not None:
         cau_hinh += "window.GV_DATA=" + json.dumps(du_lieu_goi, ensure_ascii=False).replace("</", "<\\/") + ";"
     if api is not None:

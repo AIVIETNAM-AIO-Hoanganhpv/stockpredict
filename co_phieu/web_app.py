@@ -1077,11 +1077,36 @@ def so_fx(x, ts):
 def the_forex(kq):
     """Forex / vàng / dầu / crypto: lệnh Buy hoặc Sell, pip, lot theo % rủi ro (công thức cBot)."""
     try:
-        k = FX.ke_hoach_fx(kq, fx_von, fx_rr, fx_max)
+        ds = FX.ke_hoach_cac_khung(kq, fx_von, fx_rr, fx_max)
     except Exception as e:
         st.warning(f"Chưa tính được kế hoạch forex: {str(e)[:150]}")
         the_xu_huong(kq)
         return
+    if not ds:
+        the_xu_huong(kq)
+        return
+    ten = {"15m": "15 phút", "1H": "1 giờ", "4H": "4 giờ", "D": "Ngày", "W": "Tuần", "M": "Tháng"}
+    bang_fx = []
+    for x in ds:
+        ts_ = x.get("thong_so") or FX.thong_so(kq.ma)
+        co = bool(x.get("huong"))
+        bang_fx.append({"Khung": ten.get(x["khung"], x["khung"]), "Giữ khoảng": x["tam_giu"],
+                        "Lệnh": x["huong"] or "Đứng ngoài",
+                        "Vào": so_fx(x["vao"], ts_) if co else "–",
+                        "Cắt lỗ": so_fx(x["cat_lo"], ts_) if co else (f"HT {so_fx(x['ho_tro'], ts_)}" if x.get("ho_tro") else "–"),
+                        "Chốt lời": so_fx(x["chot_loi"], ts_) if co else (f"KC {so_fx(x['khang_cu'], ts_)}" if x.get("khang_cu") else "–"),
+                        "SL pip": round(x["sl_pip"], 1) if co else None, "Lot": x["lot"] if co else None,
+                        "Lãi $": round(x["lai_usd"], 2) if co else None, "Lỗ $": round(x["lo_usd"], 2) if co else None})
+    st.markdown("##### Điểm mua / bán theo từng khung")
+    st.dataframe(pd.DataFrame(bang_fx), hide_index=True, width="stretch")
+    dong_y = {x["huong"] for x in ds if x.get("huong")}
+    st.caption(("Các khung có lệnh đều cùng chiều → đồng thuận." if len(dong_y) == 1 else
+                "Các khung KHÔNG cùng chiều → ưu tiên khung phù hợp thời gian giữ lệnh của bạn, giảm khối lượng.")
+               + " HT = hỗ trợ (vùng mua), KC = kháng cự (vùng bán) khi đứng ngoài.")
+    chon_k = st.radio("Xem chi tiết khung", [x["khung"] for x in ds], format_func=lambda k: ten.get(k, k),
+                      index=[x["khung"] for x in ds].index("4H") if any(x["khung"] == "4H" for x in ds) else 0,
+                      horizontal=True, key=f"fx_khung_{kq.ma}")
+    k = next(x for x in ds if x["khung"] == chon_k)
     if not k.get("huong"):
         st.markdown(f"<div style='padding:14px 16px;border-radius:14px;background:#64748b;color:white'>"
                     f"<div style='font-size:14px;opacity:.9'>{kq.ma} · khung {k.get('khung', '')}</div>"

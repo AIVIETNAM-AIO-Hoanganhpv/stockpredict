@@ -104,3 +104,14 @@ def test_vndirect_du_phong(monkeypatch):
     assert du_lieu._vnd("HNXINDEX").close.iloc[-1] == 18.7    # chỉ số giữ nguyên
     assert "symbol=HNX&" in url[-1]
     du_lieu._CACHE.clear()
+
+
+def test_khoa_twelvedata(monkeypatch, tmp_path):
+    monkeypatch.delenv("TWELVEDATA_API_KEY", raising=False)
+    monkeypatch.setattr(G, "FILE_KHOA_TD", tmp_path / "khoa.txt")
+    assert G.khoa_twelvedata() == ""
+    (tmp_path / "khoa.txt").write_text("abc123DEF\n", encoding="utf-8")
+    assert G.khoa_twelvedata() == "abc123DEF"
+    assert 'window.GV_TD_KEY="abc123DEF"' in G.html_nhung(api="")
+    (tmp_path / "khoa.txt").write_text("<script>", encoding="utf-8")
+    assert G.khoa_twelvedata() == ""            # chỉ nhận chữ/số
