@@ -1,0 +1,95 @@
+# Backtest of GreenView "Cổ phiếu trung/dài hạn" (`st_daihan`), whole VN market 2000-07 → 2026-11 (run 2026-11-19)
+
+## Verdict (read this first)
+**No edge. Neither v2 (current rules) nor v1 (previous rules) beats buy & hold, the market-phase filter, or random entries in a reliable way.**
+
+- **v2 (main, ADX 25)** trades very rarely: 340 trades in 26 years over all 1,499 symbols (about 1 trade per symbol every 40 years;
+  281 symbols ever trade). Average trade +1.2 % (9 months) / +1.9 % (10 years), median −7.6 % / −8.8 %, only 20–25 % of trades win.
+  Portfolio (1 bn VND): **TEST 2014–2026 −3.3 %/yr (9 months) and −5.1 %/yr (10 years)**, max drawdown −51 % / −67 %.
+  Same period: equal-weight basket buy & hold **+7.3 %/yr**, market-phase filter **+10.6 %/yr** (max DD −28 %).
+  Random entries on the same days do as well or better (the real result is at the 45th / 29th percentile of 200 random runs).
+- **v2 filters remove good trades with the bad ones.** Going from "no Fibo filter" to v1 to v2 lowers the average trade (TEST, all symbols, 9 months):
+  +5.6 % → +5.3 % → +1.0 %. v2 does raise the median trade (−7.6 % vs −12 % for random entries), because it buys after a pullback
+  with a closer stop, but it loses the big winners, so the mean and the money result get worse.
+- **v1 (old rules) 10 years, ADX 25** is the only row that looks good in TEST (+10.8 %/yr, 94th percentile of random) but it is **not
+  reliable**: one stock (PHR, +0.84 bn VND) makes most of it — without PHR it is +2.4 %/yr; the full period is +0.4 %/yr; neighbouring
+  settings jump around (ADX 0: +17.4 %, ADX 20: +5.1 %, ADX 30: +9.0 %); the 9-month version is −2.4 %/yr (13th percentile of random).
+- **ADX filter**: no consistent effect. Higher ADX gives fewer trades and a similar or lower return. 25 is not better than 0, 20 or 30.
+- **Per symbol** (100 % of capital in one stock): v2 beats that stock's own buy & hold in 32 % of symbols in TEST — the same as random entries (32 %)
+  and the same as simply staying in cash (most symbols never trade). On liquid symbols: 21 %.
+- The GreenView sanity cases reproduce exactly (see "Check against the JS"). MWG 2026-01-30 (the motivating bad entry) is rejected under v2.
+
+Caveats: survivorship bias (symbols delisted before ~2024 are missing, so everything — benchmarks too — is optimistic); no ceiling/floor
+(limit-up/down) locks, so stops and exits assume a fill at the open; adjusted prices; before 2006 there are only 4–15 priced symbols
+and **no symbol passes the 1 bn VND liquidity filter before 2006**, so the portfolio is in cash 2000–2006 (TRAIN portfolio numbers are
+mostly 2007–2013). Liquidity uses adjusted close × volume, which understates old traded values.
+
+## Setup (details in SPEC.md)
+- 1,505 VN symbols (`bt_tung_ma/raw`), earliest 2000-07-28, end 2026-11-19. Coverage per year: tables.md "Data coverage"
+  (listed: 5 in 2000, 23 in 2005, 236 in 2008, 671 in 2013, 1,505 in 2026; liquid symbols per day: 0 until 2005, 24–125 in 2008–2014, ~300–380 since 2021).
+- Split: TRAIN 2000-07 → 2013-12, TEST 2014-01 → 2026-11. Nothing chosen on TEST (ADX 25 / profit ≥ 10 % / stop ≤ 15 % are the user's defaults).
+- v2 entry filter: monthly AND weekly strict Fibo-1.0 targets ≥ close +10 % (confirmed wave peak, pullback ≥ 23.6 %) and close ≤ C + 50 % of C→B (weekly wave).
+  v1: monthly target (else weekly) ≥ +10 %, new wave may use the running bar's high.
+- Exit: monthly MACD+Sto sell, or max hold 274 / 3,653 days, or stop. Exit reasons per lot (v2 9 m): stop 59 %, monthly sell 22 %, max hold 19 %;
+  (v2 10 y): stop 68 %, monthly sell 31 %. Median holding 82–94 days for all versions.
+
+## Portfolio, 1 bn VND (risk 20 %, max 5 names, liquidity ≥ 1 bn VND/day)
+| strategy | TRAIN CAGR | TRAIN max DD | **TEST CAGR** | TEST max DD | TEST trades | FULL CAGR | FULL max DD | random runs ≥ real (TEST) |
+|---|---|---|---|---|---|---|---|---|
+| **v2, 9 months, ADX 25** | −0.8 % | −30 % | **−3.3 %** | −51 % | 59 | −1.9 % | −51 % | 56 % |
+| **v2, 10 years, ADX 25** | −1.3 % | −35 % | **−5.1 %** | −67 % | 50 | −3.2 % | −67 % | 71 % |
+| v1, 9 months, ADX 25 | −1.6 % | −47 % | −2.4 % | −79 % | 169 | −3.5 % | −79 % | 87 % |
+| v1, 10 years, ADX 25 | +0.1 % | −51 % | +10.8 % | −55 % | 93 | +0.4 % | −62 % | 6 % |
+| no Fibo filter, 9 months, ADX 25 | −2.0 % | −47 % | +5.7 % | −59 % | 161 | +0.9 % | −59 % | |
+| no Fibo, no ADX, 9 months | −2.7 % | −53 % | +7.6 % | −70 % | 179 | +0.1 % | −68 % | |
+| EW liquid basket buy & hold | −8.4 % | −88 % | **+7.3 %** | −59 % | | −1.0 % | −88 % | |
+| market-phase filter (chu_ky) | +11.5 % | −38 % | **+10.6 %** | −28 % | | +11.1 % | −38 % | |
+
+All ADX thresholds (portfolio TEST CAGR): v2 9 m: off +2.5 %, 20: −0.2 %, 25: −3.3 %, 30: −2.2 %; v2 10 y: +4.2 / +12.1 / −5.1 / −4.5 %;
+v1 9 m: +5.0 / +5.7 / −2.4 / +3.8 %; v1 10 y: +17.4 / +5.1 / +10.8 / +9.0 %. The jumps between neighbours (only 40–180 trades in 13 years)
+show how noisy these numbers are. Random-entry portfolio (200 runs, TEST): v2 9 m mean −2.6 % (5–95 %: −7.9 … +2.7 %); v2 10 y mean −2.9 %
+(−8.6 … +3.4 %). **Sizing**: other risk/N settings do not change the picture (v2 TEST between −0.1 % and −5.1 %/yr; the sizing chosen on
+TRAIN gives v2 9 m −0.4 %, v2 10 y −1.1 %). **Concentration**: v2 9 m without its best symbol (HHS): TEST −2.9 %; top-5: HHS, TSC, DBC, MSN, DRC.
+v1 10 y without PHR: TEST +2.4 % (from +10.8 %), FULL −3.6 %.
+
+Per year (FULL run): v2 is flat or negative in most years; v2 made +62 % (9 m) / +83 % (10 y) in 2021 and lost −21 % / −37 % in 2022
+and −26 % / −37 % in 2025. EW basket and phase filter per year: tables.md.
+
+## Per symbol (100 % of capital per symbol), ADX 25
+| | trades | trades / 4 yrs / symbol | avg trade | median trade | win | % symbols beating own B&H | same, random entries (200 runs) |
+|---|---|---|---|---|---|---|---|
+| **v2 9 m, FULL** | 340 (281 symbols) | 0.1 | +1.2 % | −7.6 % | 25 % | 39.7 % | 39.6 % |
+| **v2 9 m, TEST** | 298 | 0.1 | +1.0 % | −7.6 % | 24 % | 32.2 % | 31.9 % |
+| **v2 10 y, FULL** | 338 | 0.1 | +1.9 % | −8.8 % | 20 % | 39.8 % | 39.6 % |
+| **v2 10 y, TEST** | 296 | 0.1 | +1.2 % | −8.9 % | 20 % | 32.0 % | 31.8 % |
+| v1 9 m, TEST | 3,053 | 0.8 | +5.3 % | −11.2 % | 29 % | 32.6 % | 32.5 % |
+| v1 10 y, TEST | 2,644 | 0.7 | +6.9 % | −13.4 % | 23 % | 32.7 % | 31.7 % |
+| no Fibo, ADX 25, 9 m, TEST | 3,274 | 0.8 | +5.6 % | −11.0 % | 30 % | 32.5 % | |
+
+Random entries vs real (average trade, % of 200 random runs ≥ real; low = real better): v2 9 m FULL 26 %, TEST 22 %; v2 10 y FULL 30 %,
+TEST 21 %; v1 9 m TEST 73 %; v1 10 y TEST 24 %. None is below 5 %, so the average trade is not better than random.
+The median trade is better than random for v2 (0 % of random runs reach it) but that does not turn into money (portfolio above).
+Strategy median CAGR per symbol is 0 % because most symbols never trade; buy & hold median CAGR: +2.8 % (FULL), +5.5 % (TEST).
+Liquid symbols only (292): v2 9 m TEST average trade −0.2 %, beats own B&H in 21 % of symbols (B&H median +9.2 %/yr). Full tables: tables.md.
+
+## Check against the JS (sanity)
+- `repro.py` runs the real GreenView JS (`DEFS.st_daihan`, Chromium) and the Python port on the same bars. Lot lists (days and prices) are
+  **identical in 141/141 cases for v1 and 141/141 for v2** (47 symbols × {9 m ADX 25, 10 y ADX 25, 9 m ADX 0}, full history).
+  Two fixes were needed to get there: (1) in `dayTuan` the JS compares the weekly pivot low with the **weekly close** (not the daily close);
+  (2) moving averages are computed with the JS running-sum formula — with pandas, flat prices of illiquid stocks gave float ties that flipped
+  a few crosses.
+- With data from 2021-09-01 (as in GreenView), defaults (v1 rules, 9 months, ADX 25, lai 10, catMax 15) the port gives exactly the trades
+  you listed: FPT 2024-02-02 @65,759 + 2024-02-05 @66,940 → 2024-11-05 @101,071 (max hold), 2024-11-14 @104,794 → stop 2024-11-20 @98,487;
+  VJC 2025-08-18 @111,996 + 2025-08-22 @108,073 → 2026-05-20 @132,302 (max hold); SSI 2025-10-14 @30,834 → stop 2025-10-27 @25,590.
+- On full history (v1) FPT and VJC are the same; SSI gets one extra trade (2023-08-25/28, stopped 2023-10-30/31) because with data only
+  from 2021-09 the monthly MACD/Sto are not warmed up until ~2024 (no monthly "UP" possible → no đồng pha). MWG's 2024 trade exits
+  differently for the same reason.
+- **Under v2 none of FPT, VJC, SSI, MWG has a trade since 2021-09.** MWG 2026-01-30 (v1 entry 2026-02-02 @90,465, stopped 2026-03-06):
+  v1 monthly new wave A 31,931 / B 90,757 (daily high of the running week) / C 87,259 → target 146,085. Under v2 the monthly strict wave
+  gives no target, the weekly target 93,575 is only +3.7 %, and the close 90,271 is above the pullback limit 84,441 → rejected (3 reasons).
+
+## Files (in this folder)
+- `RESULT.md` (this), `SPEC.md` (exact rules), `tables.md` (all tables), `ket_qua_dai_han.xlsx` (sheets: per symbol ADX 25 both holds
+  v2 + v1 with Vietnamese columns; all lots ADX 25 both holds v2 + v1; portfolio per year; portfolio summary).
+- Code: `dh.py` (strategy port), `repro.py` + `js_run.js` (JS check; `GreenView_v1.html` = git HEAD build, `GreenView_v2.html` = current),
+  `mat.py` (matrices), `persym_dh.py` (per symbol + random), `engine_dh.py` / `port.py` (portfolio + random), `bench.py`, `report.py`.

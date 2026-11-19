@@ -1041,7 +1041,8 @@ def the_ke_hoach(kq, kn, gt: dict, gon: bool = False):
                  f"(+DI {ax['pdi']:.0f} / −DI {ax['mdi']:.0f}) → "
                  + ("<b style='color:#15803d'>xu hướng tăng đủ mạnh ✅</b>" if ax["dat"] else
                     "<b style='color:#dc2626'>chưa đủ (cần ADX ≥ 25 và +DI > −DI) ⛔</b>")
-                 + f" · Giữ tối đa {'10 năm' if gt.get('tam') == 'M' else '9 tháng'}, cắt lỗ không quá 15%.</div>")
+                 + f" · Giữ tối đa {'10 năm' if gt.get('tam') == 'M' else '9 tháng'}. Cắt lỗ khi nến TUẦN đóng cửa dưới mức cắt lỗ "
+                 "(mức không xa quá 15%), hoặc giá đóng cửa ngày đã giảm 15% so với giá mua.</div>")
     if gt.get("ngay_du_kien") is not None:
         kh = (f" (sớm {gt['ngay_som']:%d/%m} – muộn {gt['ngay_muon']:%d/%m/%Y})"
               if gt.get("ngay_som") is not None and gt.get("ngay_muon") is not None else "")
