@@ -501,7 +501,7 @@
   /* ======================================================================
    * Khoá học — ĐỒNG PHA NGÀY/TUẦN/THÁNG: vào lệnh theo khung NGÀY khi ngày, tuần, tháng cùng TĂNG;
    * giữ & bán theo tín hiệu bán MACD + Sto của khung TUẦN (lệnh tuần) hoặc THÁNG (lệnh tháng).
-   * Một khung "TĂNG" khi đủ 3 điều kiện: đỉnh/đáy sau cao hơn đỉnh/đáy trước · MACD trên đường tín hiệu ·
+   * Một khung "TĂNG" khi đủ ≥ 2 trong 3 điều kiện: đỉnh/đáy sau cao hơn đỉnh/đáy trước · MACD trên đường tín hiệu ·
    * Sto dài (13-13-5) %K trên %D. (MA 80% và Heikin Ashi chỉ để tham khảo.)
    * ====================================================================== */
   function xuHuongTang(D, k) {
@@ -518,7 +518,7 @@
         if (isL) { l2 = l1; l1 = D.l[p]; }
       }
       const caoDan = isN(h2) && isN(l2) && h1 > h2 && l1 > l2;
-      up[i] = caoDan && m[i] > sg[i] && K[i] > Dd[i];
+      up[i] = (caoDan ? 1 : 0) + (m[i] > sg[i] ? 1 : 0) + (K[i] > Dd[i] ? 1 : 0) >= 2;   // đủ 2/3 điều kiện
     }
     return up;
   }
@@ -588,7 +588,7 @@
         banPhan: I.ban === 'Bán 70% rồi bán nốt' ? (i => banTF[i] && ++lan === 1) : null,
         banHet: i => I.ban === 'Bán 70% rồi bán nốt' ? (banTF[i] && lan >= 1) : banTF[i],
         tenBan: `Tín hiệu bán MACD+Sto ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'}`,
-        note: `Đồng pha: chỉ vào khi Ngày + Tuần + Tháng cùng TĂNG (đỉnh/đáy cao dần + MACD trên tín hiệu + Sto 13-13-5 %K>%D); vào lệnh theo tín hiệu khung ngày (${I.vao}); bán theo tín hiệu bán MACD+Sto khung ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'} hoặc cắt lỗ đáy ngày gần nhất. CHƯA có kết quả kiểm định – đang backtest.`
+        note: `Đồng pha: chỉ vào khi Ngày + Tuần + Tháng cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD trên tín hiệu, Sto 13-13-5 %K>%D); vào lệnh theo tín hiệu khung ngày (${I.vao}); bán theo tín hiệu bán MACD+Sto khung ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'} hoặc cắt lỗ đáy ngày gần nhất. CHƯA có kết quả kiểm định – đang backtest.`
       };
       return moPhongLo(D, R, I);
     }
