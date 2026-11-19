@@ -181,6 +181,12 @@ def bang(ket_qua: list[KetQuaMa], tam: str = "D", von: float = 100e6) -> pd.Data
             "Tiền lỗ": _so(lai["sl"]["lai"], 0) if lai.get("sl") else None,
             "Số CP": lai["tp1"]["so_cp"] if lai.get("tp1") else None,
             "Cách vùng mua %": _so(kn.cach_vung_pct * 100, 1) if kn.cach_vung_pct is not None else None,
+            "Dự kiến chốt lời": (kn.thoi_gian.ngay(kn.thoi_gian.thuong).strftime("%d/%m/%Y")
+                                 if kn.thoi_gian is not None and kn.thoi_gian.thuong is not None else None),
+            "Số phiên dự kiến": (kn.thoi_gian.phien(kn.thoi_gian.thuong)
+                                 if kn.thoi_gian is not None and kn.thoi_gian.thuong is not None else None),
+            "Khoảng ngày chốt lời": (f"{kn.thoi_gian.ngay(kn.thoi_gian.som):%d/%m} – {kn.thoi_gian.ngay(kn.thoi_gian.muon):%d/%m/%Y}"
+                                     if kn.thoi_gian is not None and kn.thoi_gian.som is not None else None),
             "GTGD (tỷ)": _so(r.gtgd / 1e9, 1),
             **(r.co_ban or {}),
             "Lý do": " · ".join(kn.ly_do),

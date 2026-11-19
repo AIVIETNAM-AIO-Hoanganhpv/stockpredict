@@ -41,6 +41,11 @@ Khi có **từ 3 dấu hiệu** và giá đang ở gần vùng đỉnh, biểu �
 
 Bảng điểm có thêm dòng "Tín hiệu đỉnh". Bạn đổi số dấu hiệu tối thiểu trong nhóm cài đặt "Tín hiệu bán ở đỉnh".
 
+## Ngày chốt lời dự kiến (timing)
+Khi vào lệnh Mua, script vẽ một **đường dọc chấm màu xanh ngọc** tại ngày dự kiến chạm chốt lời, kèm nhãn
+"Dự kiến chốt lời ~N phiên". Số phiên được tính theo tốc độ của nhịp tăng trước. Nhãn cũng ghi độ dài nhịp trước,
+chính là mốc Fibonacci thời gian 1.0. Tắt bằng mục "Vẽ ngày chốt lời dự kiến" trong nhóm Hiển thị.
+
 ## Các cài đặt (nút ⚙ cạnh tên strategy)
 | Cài đặt | Mặc định | Ghi chú |
 |---|---|---|

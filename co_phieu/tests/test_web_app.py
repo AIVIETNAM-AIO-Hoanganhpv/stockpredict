@@ -126,3 +126,12 @@ def test_tin_thi_truong_loc(gia_gia):
     at.text_input(key="tin_tk").set_value("FPT").run()
     at.checkbox(key="tin_ma").check().run()
     assert not at.exception, at.exception
+
+
+def test_tin_kinh_te_va_chu_de(gia_gia):
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
+    for nhom in ("Kinh tế trong nước", "Kinh tế thế giới", "Chủ đề vĩ mô"):
+        at.radio(key="tin_nhom").set_value(nhom).run()
+        assert not at.exception, (nhom, at.exception)
+    at.radio(key="tin_cd").set_value("Giá vàng").run()
+    assert not at.exception, at.exception

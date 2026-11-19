@@ -249,3 +249,23 @@ def test_kiem_dinh_co_suc_khoe_tai_chinh():
     assert any(x[3] is not None for x in r["goc"])
     t = KD.tong_hop([r, r])
     assert len(t["theo_suc_khoe"]) == 4 and "Kết hợp sức khỏe" in KD.markdown(t, "thử")
+
+
+def test_timing_ngay_chot_loi():
+    kq, kn = quet.phan_tich_df("AAA", gia_vn(1.0))
+    k = kn["D"]
+    assert k.chot_loi1 and k.thoi_gian is not None
+    tg = k.thoi_gian
+    assert tg.som <= tg.thuong <= tg.muon                       # nhịp nhanh → sớm
+    d_som, d_muon = tg.ngay(tg.som), tg.ngay(tg.muon)
+    assert d_som <= d_muon and d_som.weekday() < 5 and d_som > kq.frames["D"].index[-1]
+    assert len(tg.fibo) == 3 and tg.fibo[0] <= tg.fibo[1] <= tg.fibo[2] and tg.fibo[0] >= 1
+    assert "phiên" in tg.mo_ta()
+    # khung tuần: 1 nến = 5 phiên
+    tw = kn["W"].thoi_gian
+    if tw is not None and tw.thuong is not None:
+        assert tw.phien(tw.thuong) == max(1, round(tw.thuong * 5))
+    # chốt lời thấp hơn giá vào → không dự kiến
+    assert K.du_kien_thoi_gian(kq.frames["D"], kq.khung[-1], 100, 90).thuong is None
+    b = quet.bang([quet.KetQuaMa("AAA", "HSX", "A", kq=kq, kn=kn)], "D")
+    assert "Dự kiến chốt lời" in b and "Số phiên dự kiến" in b

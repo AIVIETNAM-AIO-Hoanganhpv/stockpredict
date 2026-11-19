@@ -38,7 +38,7 @@ def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, g
     """`quy`, `ho_so`: dữ liệu BCTC quý & hồ sơ (nếu có) để chấm sức khỏe tài chính TẠI từng thời điểm."""
     o, h, l, c = (df[x].to_numpy(float) for x in ("open", "high", "low", "close"))
     n = len(df)
-    out = {"ma": ma, "mua": [], "cho": [], "ban": [], "theo_doi_dinh": [], "goc": [], "khong_mua": []}
+    out = {"ma": ma, "mua": [], "cho": [], "ban": [], "theo_doi_dinh": [], "goc": [], "khong_mua": [], "timing": []}
     start = max(260, n - giu - 1 - buoc * so_diem)
     for i in range(start, n - giu - 1, buoc):
         try:
@@ -64,6 +64,9 @@ def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, g
             if k.cat_lo < vao < k.chot_loi1:
                 lai, kqua, ngay = _giao_dich(o, h, l, c, i + 1, vao, k.cat_lo, k.chot_loi1, i + giu)
                 out["mua"].append((k.muc, lai, kqua, ngay, r20, sk))
+                tg = k.thoi_gian
+                if tg is not None and tg.thuong is not None:
+                    out["timing"].append((tg.som, tg.thuong, tg.muon, tg.fibo, ngay + 1, kqua))
         elif k.muc == "Chờ về vùng mua" and k.gia_mua and k.cat_lo and k.chot_loi1:
             for j in range(i + 1, min(i + 21, n - 1)):
                 if l[j] <= k.gia_mua:
@@ -148,6 +151,23 @@ def tong_hop(ket_qua: list[dict]) -> dict:
             res[ten] = {"so": 0}
     res["theo_doi_dinh"] = {"so": int(len(td)), "ti_le_dung_20": float((td < 0).mean()) if len(td) else None,
                             "r20_tb": float(td.mean()) if len(td) else None}
+    # Timing: lệnh chạm chốt lời có nằm trong khoảng ngày dự kiến không
+    tm = [x for r in ket_qua for x in r.get("timing", []) if x[5] == "chốt lời"]
+    if tm:
+        that = np.array([x[4] for x in tm], float)
+        som, thuong, muon = (np.array([x[j] for x in tm], float) for j in (0, 1, 2))
+        fibo = [x[3] for x in tm]
+        f_gan = np.array([min(f, key=lambda v: abs(v - a)) if f else np.nan for f, a in zip(fibo, that)], float)
+        f_1 = np.array([f[1] if f else np.nan for f in fibo], float)
+        res["timing"] = {
+            "so": len(tm), "phien_thuc_te_tv": float(np.median(that)),
+            "toc_do_trong_khoang": float(((that >= np.floor(som)) & (that <= np.ceil(muon))).mean()),
+            "toc_do_sai_so_tv": float(np.median(np.abs(that - thuong))),
+            "fibo1_sai_so_tv": float(np.nanmedian(np.abs(that - f_1))),
+            "fibo_khoang": float(np.nanmean((that >= np.floor([f[0] if f else np.nan for f in fibo]))
+                                            & (that <= np.ceil([f[2] if f else np.nan for f in fibo])))),
+            "fibo_gan_nhat_sai_so_tv": float(np.nanmedian(np.abs(that - f_gan))),
+        }
     # Phân theo sức khỏe tài chính tại thời điểm báo tín hiệu
     cho = [x for r in ket_qua for x in r["cho"]]
     goc_all = [x for r in ket_qua for x in r["goc"]]
@@ -233,6 +253,14 @@ def markdown(t: dict, luc: str) -> str:
             dong.append(f"| {x['nhom']} | {_p(x['goc_giu_60'])} ({x['goc_so']:,}) | {m['so_lenh']} | "
                         f"{_pp(m.get('ti_le_thang'))} | {_p(m.get('lai_tb'))} | {c_['so_lenh']} | "
                         f"{_pp(c_.get('ti_le_thang'))} | {_p(c_.get('lai_tb'))} | {x['ban_so']} | {_pp(x['ban_dung'])} |")
+    if t.get("timing"):
+        x = t["timing"]
+        dong += ["", "## Timing – dự kiến ngày chốt lời (các lệnh Mua chạm chốt lời)",
+                 f"- Số lệnh: {x['so']}, thực tế trung vị {x['phien_thuc_te_tv']:.0f} phiên.",
+                 f"- **Theo tốc độ nhịp cũ**: {_pp(x['toc_do_trong_khoang'])} lệnh chạm chốt lời trong khoảng sớm–muộn; "
+                 f"sai số trung vị so với mốc 'thường' {x['toc_do_sai_so_tv']:.0f} phiên.",
+                 f"- **Theo Fibonacci thời gian**: {_pp(x['fibo_khoang'])} lệnh trong khoảng 0.618–1.618; "
+                 f"sai số trung vị với mốc 1.0: {x['fibo1_sai_so_tv']:.0f} phiên."]
     td = t["theo_doi_dinh"]
     dong += ["", f"Theo dõi đỉnh ({td['so']} lần): đúng {_pp(td['ti_le_dung_20'])}, TB 20 phiên {_p(td['r20_tb'])}.",
              "", "> Lưu ý: chỉ gồm các mã còn niêm yết và đủ thanh khoản hôm nay (thiên lệch sống sót); "

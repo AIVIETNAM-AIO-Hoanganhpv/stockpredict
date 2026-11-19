@@ -81,6 +81,13 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
   Kèm theo **vùng bán đẹp**: nơi hợp lưu kháng cự (Fibo mở rộng, đỉnh cũ, vùng cung).
 - **Phân ngành** (19 ngành ICB cấp 2): lọc theo ngành, bảng **sức mạnh ngành** (điểm TB, % mã tăng/giảm, hiệu suất 20 phiên).
   Mã thuộc ngành Mạnh được +10 điểm khi xếp hạng mua, ngành Yếu bị −10 điểm và không được xếp "Mua mạnh".
+- **Timing – dự kiến ngày chốt lời**:
+  - **Theo tốc độ**: đo các nhịp tăng trước của chính mã đó (mỗi phiên đi được bao nhiêu ATR), từ đó suy ra số phiên
+    để đi từ giá mua tới chốt lời. Kết quả là khoảng **sớm – thường – muộn**.
+  - **Theo Fibonacci thời gian**: đáy hồi cộng 0.618 / 1 / 1.618 lần độ dài nhịp tăng trước.
+  - Ngày tính theo phiên giao dịch: bỏ thứ 7, chủ nhật, chưa trừ ngày lễ.
+  - Hiện ở: thẻ khuyến nghị, bảng Nên mua (cột "Dự kiến chốt lời"), tab Danh mục (số phiên còn lại), TradingView
+    (đường dọc kèm nhãn số phiên).
 - **Tính lãi**: nhập số vốn → số cổ phiếu (lô 100), tiền và % lãi khi chạm chốt lời, tiền lỗ khi chạm cắt lỗ.
   Đã trừ phí mua 0,15%, phí bán 0,15% và thuế bán 0,1%.
 
@@ -112,8 +119,11 @@ py du_doan.py --doanh-nghiep FPT HPG     # hồ sơ, sức khỏe tài chính, x
 
 ## Tin tức
 - **Tin theo mã**: lấy từ Google News, tổng hợp nhiều báo, kèm tin và công bố của doanh nghiệp (nguồn Vietcap).
-- **Tab "Tin thị trường"**: tin mới nhất từ CafeF, Vietstock, VnExpress Kinh doanh, tự làm mới mỗi 15 phút.
-  Lọc được theo nguồn, đánh giá và từ khóa/mã.
+- **Tab "Tin thị trường"** có 4 nhóm, tự làm mới mỗi 15 phút, lọc được theo nguồn, đánh giá và từ khóa/mã:
+  - **Chứng khoán**: CafeF, Vietstock, VnExpress Kinh doanh.
+  - **Kinh tế trong nước**: CafeF Vĩ mô và Ngân hàng, Vietstock Vĩ mô và Kinh tế.
+  - **Kinh tế thế giới**: CafeF và Vietstock Quốc tế, BBC Business và MarketWatch (tiếng Anh).
+  - **Chủ đề vĩ mô** (theo Google News): lãi suất, tỷ giá USD, Fed, giá vàng, giá dầu, xuất nhập khẩu, lạm phát, đầu tư công.
 - **Tự gắn mã** khi tiêu đề nhắc tới mã (HPG) hoặc tên công ty (Hòa Phát, Techcombank…).
 - **Nhãn Tích cực / Tiêu cực**: gắn theo từ khóa, ví dụ "lãi kỷ lục", "trúng thầu" / "thua lỗ", "bị phạt", "thủng đáy".
   Đây chỉ là gợi ý, có thể sai.

@@ -1,6 +1,7 @@
-"""Tin tức thị trường & doanh nghiệp.
+"""Tin tức thị trường, kinh tế trong nước & thế giới, doanh nghiệp.
 
-Nguồn: Google News (tìm theo mã / tên công ty), RSS CafeF, Vietstock, VnExpress Kinh doanh,
+Nguồn: Google News (theo mã / tên công ty / chủ đề vĩ mô), RSS CafeF, Vietstock, VnExpress Kinh doanh,
+BBC Business, MarketWatch,
 tin doanh nghiệp từ Vietcap. Tự gắn mã cổ phiếu được nhắc trong tiêu đề và đánh dấu tin
 Tích cực / Tiêu cực theo từ khóa (chỉ là gợi ý, có thể sai).
 """
@@ -21,6 +22,27 @@ RSS = {
     "Vietstock": "https://vietstock.vn/830/chung-khoan/co-phieu.rss",
     "VnExpress": "https://vnexpress.net/rss/kinh-doanh.rss",
 }
+# Tin kinh tế theo nhóm (RSS công khai)
+NHOM = {
+    "Chứng khoán": RSS,
+    "Kinh tế trong nước": {
+        "CafeF Vĩ mô": "https://cafef.vn/vi-mo-dau-tu.rss",
+        "CafeF Ngân hàng": "https://cafef.vn/tai-chinh-ngan-hang.rss",
+        "Vietstock Vĩ mô": "https://vietstock.vn/761/kinh-te/vi-mo.rss",
+        "Vietstock Kinh tế": "https://vietstock.vn/768/kinh-te/kinh-te-dau-tu.rss",
+    },
+    "Kinh tế thế giới": {
+        "CafeF Quốc tế": "https://cafef.vn/tai-chinh-quoc-te.rss",
+        "Vietstock Quốc tế": "https://vietstock.vn/772/the-gioi/tai-chinh-quoc-te.rss",
+        "BBC Business": "https://feeds.bbci.co.uk/news/business/rss.xml",
+        "MarketWatch": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    },
+}
+TIENG_ANH = {"BBC Business", "MarketWatch"}
+# Chủ đề vĩ mô theo dõi qua Google News
+CHU_DE = {"Lãi suất": "lãi suất ngân hàng", "Tỷ giá USD": "tỷ giá USD VND", "Fed": "Fed lãi suất",
+          "Giá vàng": "giá vàng", "Giá dầu": "giá dầu thế giới", "Xuất nhập khẩu": "xuất khẩu Việt Nam",
+          "Lạm phát (CPI)": "lạm phát CPI Việt Nam", "Đầu tư công": "giải ngân đầu tư công"}
 GOOGLE = "https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi"
 HAN_CACHE = 15 * 60                     # tin tức: dùng lại trong 15 phút
 
@@ -39,6 +61,11 @@ TU_XAU = ["thua lỗ", "lỗ ròng", "báo lỗ", "lỗ lũy kế", "lợi nhu�
 KHONG_PHAI_MA = {"CEO", "GDP", "USD", "VND", "FDI", "ETF", "IPO", "CPI", "FED", "SBV", "NHNN", "BĐS", "TTCK", "HĐQT",
                  "ĐHĐCĐ", "UBCK", "AI", "EU", "UAE", "TPP", "WTO", "IMF", "ADB", "PMI", "VAT", "KRX", "MSCI",
                  "FTSE", "NAV", "EPS", "ROE", "P/E", "OTC", "THE", "AND", "FOR", "CTCK", "VNI", "HCM", "TPHCM", "BOT"}
+
+TU_TOT_EN = ["surge", "surges", "soar", "soars", "record high", "beats", "beat expectations", "rally", "rallies", "jumps",
+             "gains", "rises", "growth", "upgrade", "boost", "rebound", "strong"]
+TU_XAU_EN = ["plunge", "plunges", "slump", "slumps", "recession", "layoffs", "cuts jobs", "misses", "falls", "fall",
+             "drops", "tumbles", "crash", "downgrade", "warning", "default", "bankruptcy", "inflation fears", "tariff", "war"]
 
 _khoa = threading.Lock()
 _cache: dict = {}
@@ -78,12 +105,14 @@ def _sach(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def cam_xuc(tieu_de: str, tom_tat: str = "") -> int:
+def cam_xuc(tieu_de: str, tom_tat: str = "", tieng_anh: bool = False) -> int:
     """Đếm từ khóa tốt/xấu trong tiêu đề (trọng số 2) và tóm tắt (trọng số 1)."""
+    tot, xau = (TU_TOT_EN, TU_XAU_EN) if tieng_anh else (TU_TOT, TU_XAU)
+
     def dem(txt, ds):
         t = f" {txt.lower()} "
         return sum(1 for w in ds if re.search(rf"(?<!\w){re.escape(w)}(?!\w)", t))
-    diem = 2 * (dem(tieu_de, TU_TOT) - dem(tieu_de, TU_XAU)) + dem(tom_tat, TU_TOT) - dem(tom_tat, TU_XAU)
+    diem = 2 * (dem(tieu_de, tot) - dem(tieu_de, xau)) + dem(tom_tat, tot) - dem(tom_tat, xau)
     return 1 if diem > 0 else (-1 if diem < 0 else 0)
 
 
@@ -151,15 +180,16 @@ def doc_rss(raw: bytes, nguon: str) -> list[Tin]:
             tg = pd.Timestamp(email.utils.parsedate_to_datetime(it.findtext("pubDate"))).tz_convert("Asia/Ho_Chi_Minh")
         except Exception:
             tg = None
+        anh = nguon in TIENG_ANH
         out.append(Tin(tieu_de, (it.findtext("link") or "").strip(), nguon_tin, tg, tom_tat[:300],
-                       tim_ma(tieu_de), cam_xuc(tieu_de, tom_tat)))
+                       [] if anh else tim_ma(tieu_de), cam_xuc(tieu_de, tom_tat, anh)))
     return out
 
 
-def tin_thi_truong(nguon: list[str] | None = None) -> list[Tin]:
-    """Tin mới nhất từ các báo tài chính (RSS), mới → cũ, bỏ tin trùng tiêu đề."""
+def tin_thi_truong(nguon: list[str] | None = None, nhom: str = "Chứng khoán") -> list[Tin]:
+    """Tin mới nhất của một nhóm (Chứng khoán / Kinh tế trong nước / Kinh tế thế giới), mới → cũ, bỏ trùng."""
     ds = []
-    for ten, url in RSS.items():
+    for ten, url in NHOM.get(nhom, RSS).items():
         if nguon and ten not in nguon:
             continue
         try:
@@ -167,6 +197,16 @@ def tin_thi_truong(nguon: list[str] | None = None) -> list[Tin]:
         except Exception:
             continue
     return _gop(ds)
+
+
+def tin_chu_de(chu_de: str, so: int = 30) -> list[Tin]:
+    """Tin theo chủ đề vĩ mô (Google News): lãi suất, tỷ giá, Fed, giá vàng, giá dầu…"""
+    q = CHU_DE.get(chu_de, chu_de)
+    try:
+        ds = doc_rss(_tai(GOOGLE.format(q=urllib.parse.quote(q))), "Google News")
+    except Exception:
+        return []
+    return _gop(ds)[:so]
 
 
 def tin_theo_ma(ma: str, ten_cong_ty: str | None = None, so: int = 20) -> list[Tin]:

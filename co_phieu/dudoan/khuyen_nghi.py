@@ -51,6 +51,7 @@ class KhuyenNghi:
     ly_do: list = field(default_factory=list)
     gtgd: float | None = None   # giá trị giao dịch bình quân 20 phiên
     san: str = ""
+    thoi_gian: object = None    # ThoiGian – ngày chốt lời dự kiến
 
     @property
     def hang(self) -> int:
@@ -236,9 +237,91 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str | None = None, san: str | 
         kn.muc = "Chờ về vùng mua"
         ly_do.append(f"Stoch quá mua ({stoch_k:.0f}) – chờ nhịp chỉnh.")
 
+    if kn.gia_mua and kn.chot_loi1:
+        try:
+            kn.thoi_gian = du_kien_thoi_gian(df, kqk, kn.gia_mua, kn.chot_loi1)
+        except Exception:
+            kn.thoi_gian = None
     dfd = kq.frames.get("D", df)
     kn.gtgd = float((dfd["close"] * dfd["volume"]).iloc[-20:].mean()) if len(dfd) else None
     return kn
+
+
+# ------------------------------------------------------------------------- timing: ngày chốt lời dự kiến
+PHIEN_MOI_NEN = {"D": 1, "W": 5, "M": 21, "4H": 0.5, "1H": 0.2, "15m": 0.05}
+
+
+def _nhip_tang_cu(kqk: KetQuaKhung, so: int = 12) -> list:
+    """Các nhịp tăng đáy → đỉnh gần đây: (vị trí đáy, vị trí đỉnh, giá đáy, giá đỉnh)."""
+    st = kqk.cau_truc
+    if not st:
+        return []
+    sw = sorted(st.swings, key=lambda x: x.i)
+    out = []
+    for a, b in zip(sw, sw[1:]):
+        if a.kind == "L" and b.kind == "H" and b.price > a.price and b.i > a.i:
+            out.append((a.i, b.i, a.price, b.price))
+    return out[-so:]
+
+
+@dataclass
+class ThoiGian:
+    som: float | None = None          # số nến (khung đang xét)
+    thuong: float | None = None
+    muon: float | None = None
+    fibo: tuple | None = None         # (0.618, 1, 1.618) × độ dài nhịp trước, tính từ đáy hồi – số nến từ hôm nay
+    khung: str = "D"
+    tu_ngay: object = None
+
+    def phien(self, x):
+        return None if x is None else max(1, round(x * PHIEN_MOI_NEN.get(self.khung, 1)))
+
+    def ngay(self, x):
+        """Ngày giao dịch dự kiến (bỏ thứ 7, CN; chưa trừ ngày lễ)."""
+        n = self.phien(x)
+        if n is None or self.tu_ngay is None:
+            return None
+        return pd.bdate_range(pd.Timestamp(self.tu_ngay) + pd.Timedelta(days=1), periods=n)[-1]
+
+    def mo_ta(self) -> str:
+        if self.thuong is None:
+            return ""
+        f = lambda d: d.strftime("%d/%m/%Y") if d is not None else "?"  # noqa: E731
+        return (f"~{self.phien(self.thuong)} phiên ({f(self.ngay(self.som))} – {f(self.ngay(self.muon))}, "
+                f"thường {f(self.ngay(self.thuong))})")
+
+
+def du_kien_thoi_gian(df: pd.DataFrame, kqk: KetQuaKhung, gia_vao: float, chot_loi: float) -> ThoiGian:
+    """Dự kiến bao lâu chạm chốt lời.
+    • Tốc độ: mỗi nhịp tăng cũ đi được bao nhiêu ATR mỗi nến → số nến cần để đi (chốt lời − giá vào);
+      nhịp nhanh (phân vị 75%) → sớm, trung vị → thường, chậm (25%) → muộn.
+    • Fibonacci thời gian (LEVEL 1): đáy hồi + 0.618 / 1 / 1.618 × độ dài nhịp tăng trước."""
+    tg = ThoiGian(khung=kqk.khung, tu_ngay=df.index[-1])
+    if not gia_vao or not chot_loi or chot_loi <= gia_vao or len(df) < 40:
+        return tg
+    atr = chi_bao.atr(df).to_numpy()
+    nhip = _nhip_tang_cu(kqk)
+    toc = []
+    for i0, i1, p0, p1 in nhip:
+        a = atr[i1] if i1 < len(atr) and atr[i1] > 0 else None
+        if a:
+            toc.append((p1 - p0) / a / (i1 - i0))
+    a_now = atr[-1]
+    if toc and a_now > 0:
+        can = (chot_loi - gia_vao) / a_now
+        q = pd.Series(toc).quantile([0.25, 0.5, 0.75])
+        tg.muon, tg.thuong, tg.som = (min(250, max(1, can / v)) if v > 0 else None for v in q)
+    if nhip:
+        i0, i1, _, _ = nhip[-1]
+        T = i1 - i0
+        sau_dinh = df["low"].iloc[i1 + 1:]
+        goc = int(sau_dinh.values.argmin()) + i1 + 1 if len(sau_dinh) else i1   # đáy hồi sau đỉnh
+        hien_tai = len(df) - 1
+        moc = [goc + T * r - hien_tai for r in (0.618, 1.0, 1.618)]
+        if moc[-1] <= 0:                         # các mốc đã qua → đếm lại từ hôm nay
+            moc = [T * r for r in (0.618, 1.0, 1.618)]
+        tg.fibo = tuple(max(1, x) for x in moc)
+    return tg
 
 
 # ------------------------------------------------------------------------- tín hiệu đỉnh

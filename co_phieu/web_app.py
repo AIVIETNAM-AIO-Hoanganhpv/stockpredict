@@ -124,6 +124,15 @@ def the_khuyen_nghi(kn, von: float, lo: int = 100):
         c2.metric("Cắt lỗ", _f(kn.cat_lo), f"{kn.lo_pct:+.1%}" if kn.lo_pct is not None else None)
         c3.metric("Chốt lời", _f(kn.chot_loi1), f"{kn.lai_pct:+.1%}" if kn.lai_pct is not None else None)
         c4.metric("Lãi/Lỗ (R:R)", f"{kn.rr:.1f}" if kn.rr else "–")
+        tg = kn.thoi_gian
+        if tg is not None and tg.thuong is not None:
+            dong = f"⏱ **Dự kiến chạm chốt lời** (theo tốc độ các nhịp tăng trước): {tg.mo_ta()}"
+            if tg.fibo:
+                f = lambda d: d.strftime("%d/%m/%Y") if d is not None else "?"  # noqa: E731
+                dong += (f"  \n⏱ Theo Fibonacci thời gian: {f(tg.ngay(tg.fibo[0]))} / {f(tg.ngay(tg.fibo[1]))} / "
+                         f"{f(tg.ngay(tg.fibo[2]))} (0.618 / 1 / 1.618 × nhịp trước)")
+            st.markdown(dong)
+            st.caption("Ngày tính theo phiên giao dịch (bỏ thứ 7, CN; chưa trừ ngày lễ). Chỉ là ước lượng.")
         lai = K.ke_hoach_von(kn, von, lo)
         if lai.get("tp1") and lai["tp1"]["so_cp"] > 0:
             rows = [("Chốt lời 1", kn.chot_loi1, lai["tp1"])]
@@ -302,8 +311,13 @@ def tin_ma(ma, ten):
 
 
 @st.cache_data(ttl=15 * 60, show_spinner=False)
-def tin_cho(nguon: tuple):
-    return TT.tin_thi_truong(list(nguon))
+def tin_cho(nguon: tuple, nhom: str = "Chứng khoán"):
+    return TT.tin_thi_truong(list(nguon), nhom)
+
+
+@st.cache_data(ttl=15 * 60, show_spinner=False)
+def tin_chu_de(chu_de: str):
+    return TT.tin_chu_de(chu_de)
 
 
 MAU_TIN = {1: "#16a34a", -1: "#dc2626", 0: "#64748b"}
@@ -467,7 +481,8 @@ with tab0:
                 col.metric(m, int(dem.get(m, 0)))
             if not b.empty:
                 cot = [c for c in ["Mã", "Ngành", "Khuyến nghị", "Giá", "Vùng mua", "Giá mua", "Cắt lỗ", "Chốt lời",
-                                   "R:R", "% lãi", "Tiền lãi", "Tiền lỗ", "Số CP", "Sức khỏe", "P/E", "ROE %",
+                                   "R:R", "% lãi", "Dự kiến chốt lời", "Số phiên dự kiến", "Tiền lãi", "Tiền lỗ", "Số CP",
+                                   "Sức khỏe", "P/E", "ROE %",
                                    "Tăng LN %", "CTCK", "Ngành mạnh/yếu", "Tín hiệu đỉnh", "GTGD (tỷ)"] if c in b]
                 hien = b[cot]
                 st.dataframe(hien.style.map(lambda v: f"color:{K.MAU_MUC.get(v, '#000')};font-weight:600",
@@ -613,21 +628,31 @@ with tab_loc:
                            file_name="bo_loc.csv", mime="text/csv", width="stretch")
 
 with tab_tin:
-    c1, c2 = st.columns(2)
-    nguon = c1.multiselect("Nguồn", list(TT.RSS), default=list(TT.RSS), key="tin_nguon")
-    danh_gia = c2.multiselect("Đánh giá", ["Tích cực", "Tiêu cực", "Trung tính"],
-                              default=["Tích cực", "Tiêu cực", "Trung tính"], key="tin_dg")
-    tu_khoa = st.text_input("Tìm theo từ khóa hoặc mã (VD: HPG, lãi suất, ngân hàng)", key="tin_tk")
-    chi_co_ma = st.checkbox("Chỉ tin có nhắc tới mã cổ phiếu", key="tin_ma")
-    if st.button("🔄 Làm mới tin", key="tin_lm"):
-        tin_cho.clear()
-    with st.spinner("Đang tải tin…"):
-        ds_tin = tin_cho(tuple(nguon))
-    tk = tu_khoa.strip()
-    loc = [t for t in ds_tin if t.nhan in danh_gia and (not chi_co_ma or t.ma)
-           and (not tk or tk.lower() in t.tieu_de.lower() or tk.upper() in t.ma)]
-    st.caption(f"{len(loc)}/{len(ds_tin)} tin · tự làm mới mỗi 15 phút · nhãn đánh giá tự động theo từ khóa")
-    hien_tin(loc, 80)
+    nhom = st.radio("Nhóm tin", list(TT.NHOM) + ["Chủ đề vĩ mô"], horizontal=True, key="tin_nhom")
+    if nhom == "Chủ đề vĩ mô":
+        cd = st.radio("Chủ đề", list(TT.CHU_DE), horizontal=True, key="tin_cd")
+        with st.spinner("Đang tìm tin…"):
+            ds_cd = tin_chu_de(cd)
+        st.caption(f"{len(ds_cd)} tin mới nhất về “{cd}” từ nhiều báo (Google News).")
+        hien_tin(ds_cd, 40)
+    else:
+        c1, c2 = st.columns(2)
+        ds_nguon = list(TT.NHOM[nhom])
+        nguon = c1.multiselect("Nguồn", ds_nguon, default=ds_nguon, key=f"tin_nguon_{nhom}")
+        danh_gia = c2.multiselect("Đánh giá", ["Tích cực", "Tiêu cực", "Trung tính"],
+                                  default=["Tích cực", "Tiêu cực", "Trung tính"], key="tin_dg")
+        tu_khoa = st.text_input("Tìm theo từ khóa hoặc mã (VD: HPG, lãi suất, ngân hàng)", key="tin_tk")
+        chi_co_ma = st.checkbox("Chỉ tin có nhắc tới mã cổ phiếu", key="tin_ma")
+        if st.button("🔄 Làm mới tin", key="tin_lm"):
+            tin_cho.clear()
+        with st.spinner("Đang tải tin…"):
+            ds_tin = tin_cho(tuple(nguon), nhom)
+        tk = tu_khoa.strip()
+        loc = [t for t in ds_tin if t.nhan in danh_gia and (not chi_co_ma or t.ma)
+               and (not tk or tk.lower() in t.tieu_de.lower() or tk.upper() in t.ma)]
+        st.caption(f"{len(loc)}/{len(ds_tin)} tin · tự làm mới mỗi 15 phút · nhãn đánh giá tự động theo từ khóa"
+                   + (" (tin tiếng Anh dùng bộ từ khóa tiếng Anh)" if nhom == "Kinh tế thế giới" else ""))
+        hien_tin(loc, 80)
 
 with tab2:
     st.caption("Nhập các mã đang nắm giữ. Khi chạy trên máy tính, danh mục được lưu vào danh_muc.csv; "
@@ -662,7 +687,20 @@ with tab2:
         if v["lai"] is not None:
             tong_von += float(r["Giá mua"]) * float(r["Số lượng"])
             tong_lai += v["lai"]
-        rows.append({"Mã": m, "Giá mua": r["Giá mua"], "Giá hiện tại": v["gia"], "Số lượng": r["Số lượng"],
+        con_lai = ""
+        if kn and kn.chot_loi1 and v["gia"] and v["gia"] < kn.chot_loi1 and kq.frames.get(tam) is not None:
+            try:
+                kqk = next(x for x in kq.khung if x.khung == tam)
+                tg = K.du_kien_thoi_gian(kq.frames[tam], kqk, v["gia"], kn.chot_loi1)
+                if tg.thuong is not None:
+                    d = tg.ngay(tg.thuong)
+                    con_lai = f"~{tg.phien(tg.thuong)} phiên ({d:%d/%m})" if d is not None else ""
+            except Exception:
+                pass
+        elif kn and kn.chot_loi1 and v["gia"] and v["gia"] >= kn.chot_loi1:
+            con_lai = "Đã tới vùng chốt lời"
+        rows.append({"Mã": m, "Dự kiến chốt lời": con_lai, "Giá mua": r["Giá mua"], "Giá hiện tại": v["gia"],
+                     "Số lượng": r["Số lượng"],
                      "Lãi/lỗ": v["lai"], "%": v["pct"] * 100 if v["pct"] is not None else None,
                      "Gợi ý": v["goi_y"], "Tín hiệu đỉnh": dinh.muc if dinh else "–",
                      "Giá bán đề xuất": v["gia_ban"], "Lãi nếu bán": v["lai_neu_ban"],

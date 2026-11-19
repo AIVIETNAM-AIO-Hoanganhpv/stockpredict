@@ -6,7 +6,7 @@
 // Lưu ý: chỉ là công cụ hỗ trợ phân tích, không phải lời khuyên đầu tư.
 
 //@version=6
-strategy("Dự đoán xu hướng (Stoch MACD MFI ADX ICT SMC Fibo)", shorttitle="DuDoanXH", overlay=true, initial_capital=100000000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.15, slippage=1, pyramiding=0, max_labels_count=500)
+strategy("Dự đoán xu hướng (Stoch MACD MFI ADX ICT SMC Fibo)", shorttitle="DuDoanXH", overlay=true, initial_capital=100000000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.15, slippage=1, pyramiding=0, max_labels_count=500, max_lines_count=500)
 
 // ───────────────────────────── Cài đặt ─────────────────────────────
 grpS = "Tín hiệu"
@@ -33,6 +33,7 @@ banKhiDinh   = input.bool(true, "Mở lệnh Bán khi có tín hiệu đỉnh (n
 grpH = "Hiển thị"
 hienBang = input.bool(true, "Hiện bảng điểm", group=grpH)
 hienNen  = input.bool(true, "Tô nền theo xu hướng", group=grpH)
+hienTG   = input.bool(true, "Vẽ ngày chốt lời dự kiến (timing)", group=grpH)
 
 // ───────────────────────────── Hàm phụ ─────────────────────────────
 f_dau(x) => x > 0 ? 1.0 : x < 0 ? -1.0 : 0.0
@@ -247,6 +248,7 @@ var float dDay = na
 var int dDayBar = na
 var float extDinh = na
 var float extDayTruoc = na
+var int extDayTruocBar = na
 var float ext1272 = na
 if not na(phD)
     soNhip := not na(dH1) and phD > dH1 ? soNhip + 1 : 0
@@ -257,6 +259,7 @@ if not na(phD)
     dH1Bar := bar_index - kPivot
     extDinh := phD
     extDayTruoc := dDay
+    extDayTruocBar := dDayBar
     ext1272 := na
 if not na(plD)
     dDay := plD
@@ -319,6 +322,13 @@ if trongKy and tinHieuMua
         strategy.entry("Mua", strategy.long, comment="Mua " + str.tostring(diem, "#"))
         strategy.exit("Thoát Mua", from_entry="Mua", limit=tpL, stop=slL)
         vaoMua := true
+        // Timing: tốc độ nhịp tăng trước (giá/nến) → số nến cần để tới chốt lời; Fibo thời gian = 1 × độ dài nhịp
+        nhipNen = not na(dH1Bar) and not na(extDayTruocBar) ? dH1Bar - extDayTruocBar : na
+        tocDo = not na(nhipNen) and nhipNen > 0 ? (extDinh - extDayTruoc) / nhipNen : na
+        if hienTG and not na(tocDo) and tocDo > 0
+            soNen = math.min(499, math.max(1, math.round((tpL - close) / tocDo)))
+            line.new(bar_index + soNen, low, bar_index + soNen, high, extend=extend.both, color=color.new(color.teal, 30), style=line.style_dotted, width=1)
+            label.new(bar_index + soNen, tpL, "Dự kiến chốt lời ~" + str.tostring(soNen) + " phiên" + (na(nhipNen) ? "" : " (Fibo 1.0: " + str.tostring(nhipNen) + ")"), style=label.style_label_down, color=color.new(color.teal, 10), textcolor=color.white, size=size.small)
     else
         strategy.close("Bán", comment="Đổi chiều")
 

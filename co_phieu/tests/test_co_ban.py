@@ -108,3 +108,15 @@ def test_tin_tuc():
     assert T.cam_xuc("Công ty Z họp đại hội cổ đông") == 0
     assert "HPG" in T.tim_ma("Hòa Phát lãi lớn quý 3") and "HPG" in T.tim_ma("Cổ phiếu HPG tăng")
     assert T.tim_ma("CEO của USD và GDP") == []
+
+
+def test_tin_kinh_te_theo_nhom(monkeypatch):
+    from dudoan import tin_tuc as T
+    assert set(T.NHOM) == {"Chứng khoán", "Kinh tế trong nước", "Kinh tế thế giới"}
+    assert T.cam_xuc("Stocks plunge as recession fears grow", tieng_anh=True) == -1
+    assert T.cam_xuc("Nvidia shares surge to record high", tieng_anh=True) == 1
+    raw = b"""<rss><channel><item><title>Fed holds rates as stocks rally</title><link>http://x</link>
+    <pubDate>Wed, 18 Nov 2026 10:00:00 GMT</pubDate></item></channel></rss>"""
+    ds = T.doc_rss(raw, "BBC Business")
+    assert ds[0].ma == [] and ds[0].cam_xuc == 1           # tin tiếng Anh: không gắn mã VN
+    assert T.tin_chu_de("Tỷ giá USD")                        # Google News (dữ liệu mẫu)
