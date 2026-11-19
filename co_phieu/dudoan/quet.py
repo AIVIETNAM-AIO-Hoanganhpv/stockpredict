@@ -36,7 +36,7 @@ def phan_tich_df(ma: str, df: pd.DataFrame, loai: str = "vn", san: str | None = 
     ds = [phan_tich.phan_tich_khung(f, k) for k, f in frames.items()]
     kq = phan_tich.tong_hop(ma, loai, ds)
     kq.frames = frames
-    return kq, {tam: K.khuyen_nghi(kq, tam, loai, san) for tam in ("D", "W")}
+    return kq, {tam: K.khuyen_nghi(kq, tam, loai, san) for tam in ("D", "W", "M")}
 
 
 def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác", lay_co_ban=True):
@@ -53,7 +53,7 @@ def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác", lay_co_ban=True):
             r.loi = "Thanh khoản thấp"
         else:
             r.kq, r.kn = phan_tich_df(ma, df, san=san)
-            r.dinh = {tam: K.tin_hieu_dinh(r.kq, tam, san=san) for tam in ("D", "W")}
+            r.dinh = {tam: K.tin_hieu_dinh(r.kq, tam, san=san) for tam in ("D", "W", "M")}
             if len(df) > 21:
                 r.hieu_suat_20 = float(df["close"].iloc[-1] / df["close"].iloc[-21] - 1)
             try:
@@ -137,7 +137,7 @@ def suc_manh_nganh(ket_qua: list[KetQuaMa], tam: str = "D") -> pd.DataFrame:
 
 def ap_dung_nganh(ket_qua: list[KetQuaMa]):
     """Ưu tiên mã thuộc ngành mạnh khi xếp hạng: +10 điểm (ngành yếu −10). Không đổi mức khuyến nghị."""
-    for tam in ("D", "W"):
+    for tam in ("D", "W", "M"):
         sm = suc_manh_nganh(ket_qua, tam)
         if sm.empty:
             continue
@@ -278,9 +278,9 @@ def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
                     K.ap_pha(kn, ck)
     except Exception as e:
         print("Không tính được chu kỳ thị trường:", e)
-    bangs = {tam: bang(ket_qua, tam, von) for tam in ("D", "W")}
-    bans = {tam: bang_ban(ket_qua, tam) for tam in ("D", "W")}
-    nganhs = {tam: suc_manh_nganh(ket_qua, tam) for tam in ("D", "W")}
+    bangs = {tam: bang(ket_qua, tam, von) for tam in ("D", "W", "M")}
+    bans = {tam: bang_ban(ket_qua, tam) for tam in ("D", "W", "M")}
+    nganhs = {tam: suc_manh_nganh(ket_qua, tam) for tam in ("D", "W", "M")}
     with pd.ExcelWriter(thu_muc / "khuyen_nghi.xlsx") as w:
         for tam, b in bangs.items():
             b.to_excel(w, sheet_name="Mua ngắn hạn (D)" if tam == "D" else "Mua trung hạn (W)", index=False)
@@ -328,10 +328,10 @@ def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
             gia[r.ma] = {"t": [x.strftime("%d/%m") for x in d.index], "c": [round(v, 2) for v in d["close"]]}
     data = {"luc": luc, "thong_ke": tk, "von": von, "gia": gia,
             "chu_ky": {k: v for k, v in ck.items() if k != "lich_su"},
-            **{tam: json.loads(bangs[tam].to_json(orient="records", force_ascii=False)) for tam in ("D", "W")},
-            **{f"ban_{tam}": json.loads(bans[tam].to_json(orient="records", force_ascii=False)) for tam in ("D", "W")},
+            **{tam: json.loads(bangs[tam].to_json(orient="records", force_ascii=False)) for tam in ("D", "W", "M")},
+            **{f"ban_{tam}": json.loads(bans[tam].to_json(orient="records", force_ascii=False)) for tam in ("D", "W", "M")},
             **{f"nganh_{tam}": json.loads(nganhs[tam].to_json(orient="records", force_ascii=False))
-               for tam in ("D", "W")}}
+               for tam in ("D", "W", "M")}}
     (thu_muc / "thi_truong.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     from . import lich_su
     lich_su.luu_ngay(data, thu_muc=thu_muc / "lich_su")      # lưu bản khuyến nghị của ngày hôm nay

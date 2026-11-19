@@ -274,3 +274,11 @@ bán dần) tốt hơn cách đơn giản; mọi cách đều bán thấp hơn �
   chuyển thành "Theo dõi – chờ" (`khuyen_nghi.ap_pha`).
 - LEVEL 1: `dudoan/level1.py` (D/W/M, lệnh vị thế 30% / xác nhận 70%, bán 50% khi đóng dưới MA điều kiện).
 - Forex: `dudoan/forex.py` (lot theo công thức cBot, `KIEM_DINH` cho từng khung).
+
+## Backtest từng mã (19/11/2026) – `bao_cao/ket_qua_tung_ma.json`, `nghien_cuu/backtest_tung_ma_RESULT.md`
+~1.500 mã VN + vàng, BTC, 20 mã Mỹ; chứng khoán đánh khung TUẦN và THÁNG. Mã VN thanh khoản (trung vị mỗi mã):
+MACD+Sto tuần +0,3%/năm, tháng +0,5%; 2MA tuần +1,6%, tháng +1,4% – mua & giữ +6,1–6,7%/năm (nhưng sụt giảm −82% so với −22…−58%).
+Chỉ 27–33% số mã thắng mua & giữ. Vàng, BTC, cổ phiếu Mỹ: không công thức nào thắng mua & giữ.
+Chọn mã theo kết quả nửa đầu lịch sử KHÔNG giúp nửa sau (tương quan −0,3…+0,1) → "mã hợp công thức" chỉ là may.
+Trong app: tra cứu mã → "📊 Backtest các công thức trên chính mã này". GreenView: chiến lược "Khoá học — Công thức 2 đường MA"
+và "Khoá học — MACD + Sto" (Chỉ báo › StockPredict) vẽ từng lệnh + bảng Kiểm tra chiến lược.

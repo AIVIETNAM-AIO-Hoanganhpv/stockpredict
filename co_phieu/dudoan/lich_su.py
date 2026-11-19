@@ -24,7 +24,7 @@ def luu_ngay(data: dict, ngay: str | None = None, thu_muc=None) -> Path | None:
     thu_muc = Path(thu_muc or THU_MUC)
     ngay = ngay or dt.datetime.now(dt.timezone(dt.timedelta(hours=7))).strftime("%Y-%m-%d")
     ban = {"ngay": ngay, "luc": data.get("luc"), "thong_ke": data.get("thong_ke")}
-    for tam in ("D", "W"):
+    for tam in ("D", "W", "M"):
         ban[f"mua_{tam}"] = _gon(data.get(tam, []), COT_MUA, lambda r: (r.get("Hạng") or 0) >= 2)
         ban[f"ban_{tam}"] = _gon(data.get(f"ban_{tam}", []), COT_BAN, lambda r: (r.get("Hạng") or 0) >= 1)
     try:

@@ -345,6 +345,158 @@
     return { markers: mk, backtest: bt, tong };
   };
 
+
+  /* ======================================================================
+   * Chiến lược theo khoá học: "Công thức 2 đường MA (LEVEL 1)" và "MACD + Sto"
+   * Lệnh vị thế 30% vốn + lệnh xác nhận 70% vốn (khi lệnh vị thế có lãi), mỗi lệnh có cắt lỗ riêng.
+   * Tín hiệu ở giá đóng cửa nến, khớp giá mở cửa nến sau; cắt lỗ khớp min(giá mở, giá cắt lỗ).
+   * ====================================================================== */
+  function moPhongLo(D, R, I) {
+    // R: { vt(i)->{stop} | null, xn(i, fillVT)->{stop} | null, banPhan(i)->bool, banHet(i)->bool, tenBan }
+    const n = D.n, cap0 = (App.settings.bt || {}).capital || 10000, phi = (I.phi != null ? I.phi : 0.15) / 100, thue = (I.thue || 0) / 100;
+    let cash = cap0, peak = cap0, mdd = 0, lo = [], cho = null, daBanPhan = false, fillVT = null;
+    const trades = [], equity = [], mk = [];
+    const dong = (l, i, px, phan, why) => {
+      const q = l.q * phan, val = q * px * (1 - phi - thue), von = q * l.ep * (1 + phi);
+      cash += val; l.q -= q;
+      trades.push({ side: 'Mua', ei: l.ei, xi: i, ep: l.ep, xp: px, pnl: val - von, pct: (val / von - 1) * 100, why });
+    };
+    for (let i = 0; i < n; i++) {
+      // 1) thực hiện lệnh chờ ở giá mở cửa
+      if (cho) {
+        const o = D.o[i];
+        if (cho.k === 'het' && lo.length) { lo.forEach(l => dong(l, i, o, 1, R.tenBan || 'Bán hết')); lo = []; mk.push({ i, pos: 'aboveBar', shape: 'arrowDown', color: '#f23645', text: 'Bán hết' }); }
+        else if (cho.k === 'phan' && lo.length) { lo.forEach(l => dong(l, i, o, I.phan / 100, `Bán ${I.phan}%`)); mk.push({ i, pos: 'aboveBar', shape: 'circle', color: '#ff9800', text: `Bán ${I.phan}%` }); }
+        else if ((cho.k === 'vt' || cho.k === 'xn') && o > cho.stop) {
+          const eq = cash + lo.reduce((a, l) => a + l.q * o, 0), tien = Math.min(cash, eq * (cho.k === 'vt' ? 0.3 : 0.7));
+          if (tien > 0) {
+            const q = tien / (o * (1 + phi)); cash -= q * o * (1 + phi);
+            lo.push({ ei: i, ep: o, q, stop: cho.stop, k: cho.k });
+            if (cho.k === 'vt') { fillVT = o; daBanPhan = false; }
+            mk.push({ i, pos: 'belowBar', shape: 'arrowUp', color: cho.k === 'vt' ? '#2962ff' : '#089981', text: cho.k === 'vt' ? 'Vị thế 30%' : 'Xác nhận 70%' });
+          }
+        }
+        lo = lo.filter(l => l.q > 1e-12); cho = null;
+      }
+      // 2) cắt lỗ trong phiên (mỗi lệnh 1 mức)
+      lo.forEach(l => { if (D.l[i] < l.stop) { dong(l, i, Math.min(D.o[i], l.stop), 1, 'Cắt lỗ'); mk.push({ i, pos: 'belowBar', shape: 'square', color: '#f23645', text: 'Cắt lỗ' }); } });
+      lo = lo.filter(l => l.q > 1e-12);
+      if (!lo.length) fillVT = null;
+      // 3) tín hiệu ở giá đóng cửa → lệnh chờ phiên sau
+      if (i < n - 1) {
+        if (lo.length) {
+          if (R.banHet(i)) cho = { k: 'het' };
+          else if (!daBanPhan && R.banPhan && R.banPhan(i)) { cho = { k: 'phan' }; daBanPhan = true; }
+          else if (!daBanPhan && fillVT != null && !lo.some(l => l.k === 'xn')) { const x = R.xn(i, fillVT); if (x) cho = { k: 'xn', stop: x.stop }; }
+        } else { const v = R.vt(i); if (v) cho = { k: 'vt', stop: v.stop }; }
+      }
+      const eq = cash + lo.reduce((a, l) => a + l.q * D.c[i], 0);
+      equity.push(eq); peak = Math.max(peak, eq); mdd = Math.max(mdd, (peak - eq) / peak * 100);
+    }
+    if (lo.length) lo.forEach(l => dong(l, n - 1, D.c[n - 1], 1, 'Đang mở'));
+    const wins = trades.filter(t => t.pnl > 0), loss = trades.filter(t => t.pnl <= 0);
+    const gp = wins.reduce((a, t) => a + t.pnl, 0), gl = -loss.reduce((a, t) => a + t.pnl, 0);
+    return { markers: mk, backtest: { trades, equity, net: cash - cap0, netPct: (cash / cap0 - 1) * 100, n: trades.length,
+      winRate: trades.length ? wins.length / trades.length * 100 : 0, pf: gl ? gp / gl : gp ? Infinity : 0, mdd,
+      avg: trades.length ? (cash - cap0) / trades.length : 0, buyHold: (D.c[n - 1] / D.c[0] - 1) * 100, note: R.note } };
+  }
+
+  // đáy gần nhất đã xác nhận (pivot k nến mỗi bên) thấp hơn giá; không có → đáy thấp nhất 10 nến
+  function dayGanNhat(D, j, k = 3, xa = 60) {
+    for (let i = j - k; i > Math.max(k - 1, j - xa); i--) {
+      let ok = true; for (let q = i - k; q <= i + k; q++) if (q !== i && D.l[q] < D.l[i]) { ok = false; break; }
+      if (ok && D.l[i] < D.c[j]) return D.l[i];
+    }
+    let m = Infinity; for (let q = Math.max(0, j - 9); q <= j; q++) m = Math.min(m, D.l[q]); return m < D.c[j] ? m : null;
+  }
+
+  // --- Công thức 2 đường MA (LEVEL 1) ---
+  DEFS.st_level1 = {
+    id: 'st_level1', name: 'Khoá học — Công thức 2 đường MA (LEVEL 1)', cat: 'strategy', overlay: true, plots: [], levels: [],
+    inputs: [['cap', 'Cặp MA (tín hiệu/điều kiện)', 'Tự chọn', 'sel', ['Tự chọn', '6/10', '10/20', '5/10']],
+      ['phan', 'Bán khi đóng cửa dưới MA điều kiện (%)', 70, 'int'], ['phi', 'Phí mỗi chiều (%)', 0.15, 'float'], ['thue', 'Thuế khi bán (%)', 0.1, 'float']],
+    calc(D, I) {
+      const c = D.c, ma = { 5: T.sma(c, 5), 6: T.sma(c, 6), 10: T.sma(c, 10), 20: T.sma(c, 20) }, atr = T.atr(D, 14);
+      const hug = T.sma(c.map((x, i) => Math.abs(x - ma[10][i])), 20).map((x, i) => x / atr[i]);
+      const capTai = i => I.cap === 'Tự chọn' ? (hug[i] <= 0.874 ? [10, 20] : [6, 10]) : I.cap.split('/').map(Number);
+      let cap = capTai(D.n - 1);
+      const tren = (i, cp) => ma[cp[0]][i] > ma[cp[1]][i];
+      const R = {
+        vt(j) {
+          if (j < 25) return null;
+          cap = capTai(j); const [a, b] = cap, sg = ma[a], cd = ma[b];
+          let cat = false; for (let x = Math.max(1, j - 2); x <= j; x++) { let deu = true; for (let q = x; q <= j; q++) if (!tren(q, cap)) deu = false; if (deu && tren(x, cap) && !tren(x - 1, cap)) cat = true; }
+          if (!(cat && c[j] > D.o[j] && c[j] > sg[j] && c[j] > cd[j])) return null;
+          let k = j; while (k >= Math.max(0, j - 30) && !(D.l[k] < cd[k])) k--;
+          if (k < Math.max(0, j - 30)) return null;
+          let sl = D.l[k]; while (k - 1 >= Math.max(0, j - 30) && D.l[k - 1] < cd[k - 1]) { k--; sl = Math.min(sl, D.l[k]); }
+          return sl < c[j] ? { stop: sl } : null;
+        },
+        xn(m, fill) {
+          const cd = ma[cap[1]];
+          if (!(c[m] > D.o[m] && c[m] > fill && c[m] > cd[m])) return null;
+          for (let q = m; q > Math.max(-1, m - 20); q--) if (D.l[q] <= cd[q] - 0.25 * (atr[q] || 0)) return { stop: D.l[q] };
+          let mn = Infinity; for (let q = m; q > Math.max(-1, m - 20); q--) if (D.l[q] < cd[q]) mn = Math.min(mn, D.l[q]);
+          return isFinite(mn) && mn < c[m] ? { stop: mn } : null;
+        },
+        banPhan: i => c[i] < ma[cap[1]][i],
+        banHet: i => ma[cap[0]][i] < ma[cap[1]][i],
+        tenBan: 'MA tín hiệu cắt xuống',
+        note: `Công thức 2 MA (slide LEVEL 1): vị thế 30% khi MA tín hiệu cắt lên MA điều kiện + nến tăng trên 2 MA; xác nhận 70% khi có lãi + nến tăng; bán ${I.phan}% khi đóng dưới MA điều kiện, bán nốt khi MA cắt xuống. Kiểm định chứng khoán VN 2020–2026: khung D +4%, W +2,6%, M +5,2%/năm – thấp hơn mua & giữ.`
+      };
+      return moPhongLo(D, R, I);
+    }
+  };
+
+  // --- MACD + Sto (Sto ngắn 8-5-3, Sto dài 13-13-5 theo bản của thầy) ---
+  App.macdSto = function (D, nguong = 2) {
+    const sto = (n, k, d) => { const K = T.sma(T.stoch(D.c, D.h, D.l, n), k); return [K, T.sma(K, d)]; };
+    const [sk, sd] = sto(8, 5, 3), [lk, ld] = sto(13, 13, 5);
+    const m = T.sub(T.ema(D.c, 12), T.ema(D.c, 26)), sg = T.ema(m, 9), hi = T.sub(m, sg);
+    const cu = (a, b, i) => i > 0 && a[i] > b[i] && a[i - 1] <= b[i - 1], cd = (a, b, i) => cu(b, a, i);
+    const gan = (fn, a, b, i, k) => { for (let q = 0; q < k; q++) if (fn(a, b, i - q)) return true; return false; };
+    const S = { Mua1: [], Mua2: [], XN1: [], XN2: [], XN3: [], Ban: [] };
+    for (let i = 0; i < D.n; i++) {
+      const bull = D.c[i] > D.o[i], bear = D.c[i] < D.o[i];
+      const sXU = cu(sk, sd, i), sXD = cd(sk, sd, i), lXU = cu(lk, ld, i), lXD = cd(lk, ld, i);
+      const somMua = i > 1 && hi[i] < 0 && hi[i] > hi[i - 1] && hi[i - 1] > hi[i - 2], somBan = i > 1 && hi[i] > 0 && hi[i] < hi[i - 1] && hi[i - 1] < hi[i - 2];
+      const chamMua = Math.abs(lk[i] - ld[i]) <= nguong || gan(cu, lk, ld, i, 2), chamBan = Math.abs(lk[i] - ld[i]) <= nguong || gan(cd, lk, ld, i, 2);
+      const haiLen = (sXU && (lXU || (i && cu(lk, ld, i - 1)))) || (lXU && i && cu(sk, sd, i - 1));
+      const haiXuong = (sXD && (lXD || (i && cd(lk, ld, i - 1)))) || (lXD && i && cd(sk, sd, i - 1));
+      const macdLen = m[i] > sg[i] && gan(cu, m, sg, i, 10), macdXuong = m[i] < sg[i] && gan(cd, m, sg, i, 10);
+      S.Mua1.push(bull && sXU && somMua); S.Mua2.push(bull && haiLen);
+      S.XN1.push(bull && haiLen && somMua); S.XN2.push(bull && sXU && somMua && chamMua); S.XN3.push(bull && sXU && chamMua && macdLen);
+      S.Ban.push(bear && ((sXD && somBan) || haiXuong || (sXD && somBan && chamBan) || (sXD && chamBan && macdXuong)));
+    }
+    return S;
+  };
+  DEFS.st_macdsto = {
+    id: 'st_macdsto', name: 'Khoá học — MACD + Sto (8-5-3 · 13-13-5)', cat: 'strategy', overlay: true, plots: [], levels: [],
+    inputs: [['thoat', 'Cách bán', 'Bán hết khi có tín hiệu bán', 'sel', ['Bán hết khi có tín hiệu bán', 'Bán 70% rồi bán nốt', 'Bán khi MA10 cắt xuống MA20']],
+      ['phan', 'Phần bán lần đầu (%)', 70, 'int'], ['phi', 'Phí mỗi chiều (%)', 0.15, 'float'], ['thue', 'Thuế khi bán (%)', 0.1, 'float']],
+    calc(D, I) {
+      const S = App.macdSto(D), ma10 = T.sma(D.c, 10), ma20 = T.sma(D.c, 20), m = T.sub(T.ema(D.c, 12), T.ema(D.c, 26)), sg = T.ema(m, 9);
+      let lanBan = 0;
+      const R = {
+        vt: j => { if (!(S.Mua1[j] || S.Mua2[j])) return null; lanBan = 0; const sl = dayGanNhat(D, j); return sl != null ? { stop: sl } : null; },
+        xn: (j, fill) => (S.XN1[j] || S.XN2[j] || S.XN3[j]) && D.c[j] > fill ? (x => x != null ? { stop: x } : null)(dayGanNhat(D, j)) : null,
+        banPhan: I.thoat === 'Bán 70% rồi bán nốt' ? (i => S.Ban[i] && ++lanBan === 1) : null,
+        banHet: i => I.thoat === 'Bán khi MA10 cắt xuống MA20' ? (ma10[i] < ma20[i] && ma10[i - 1] >= ma20[i - 1])
+          : I.thoat === 'Bán 70% rồi bán nốt' ? ((S.Ban[i] && lanBan >= 1) || (m[i] < sg[i] && m[i - 1] >= sg[i - 1]))
+            : S.Ban[i],
+        tenBan: 'Tín hiệu bán',
+        note: 'MACD + Sto (slide khoá học): vị thế 30% ở Mua 1/Mua 2, xác nhận 70% ở Xác nhận 1/2/3 khi có lãi; lệnh mua là nến tăng, bán là nến giảm. Kiểm định chứng khoán VN 2020–2026: khung D +3,1%, W −3%/năm – thua vào lệnh ngẫu nhiên.'
+      };
+      const r = moPhongLo(D, R, I);
+      // đánh dấu thêm loại tín hiệu (không phải lệnh) để nhìn
+      for (let i = 0; i < D.n; i++) {
+        const ten = S.XN1[i] ? 'XN1' : S.XN2[i] ? 'XN2' : S.XN3[i] ? 'XN3' : S.Mua2[i] ? 'M2' : S.Mua1[i] ? 'M1' : '';
+        if (ten && !r.markers.some(x => x.i === i + 1)) r.markers.push({ i, pos: 'belowBar', shape: 'circle', color: '#9598a1', text: ten });
+      }
+      return r;
+    }
+  };
+
   DEFS.st_stockpredict = {
     id: 'st_stockpredict', name: 'StockPredict — Dự đoán xu hướng', cat: 'strategy', overlay: true, plots: [], levels: [],
     inputs: [['ng', 'Ngưỡng điểm (đã kiểm định: 50)', 50, 'float'], ['loc', 'Chỉ mua khi khung lớn tăng', true, 'bool'], ['r', 'Chốt lời = k × rủi ro', 3, 'float'],

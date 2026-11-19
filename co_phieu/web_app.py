@@ -132,7 +132,8 @@ def bieu_do_plotly(kq, tab):
 
 
 # ------------------------------------------------------------------------------------------ khuyến nghị
-TAM = {"Trung hạn – khung tuần (3–9 tháng)": "W",
+TEN_TAM = {"D": "ngắn hạn (D, tham khảo)", "W": "trung hạn 3–9 tháng (W)", "M": "dài hạn 1–2 năm (M)"}
+TAM = {"Trung hạn – khung tuần (3–9 tháng)": "W", "Dài hạn – khung tháng (1–2 năm)": "M",
        "Ngắn hạn – khung ngày (chỉ tham khảo, không khuyên dùng cho chứng khoán)": "D"}
 # Thư mục báo cáo (đổi được bằng biến môi trường CO_PHIEU_BAO_CAO – test dùng thư mục tạm, không ghi đè dữ liệu thật)
 BAO_CAO = Path(os.environ.get("CO_PHIEU_BAO_CAO", HERE / "bao_cao"))
@@ -149,7 +150,7 @@ def the_khuyen_nghi(kn, von: float, lo: int = 100):
     mau = K.MAU_MUC.get(kn.muc, "#64748b")
     st.markdown(
         f"<div style='padding:12px 16px;border-radius:12px;border:2px solid {mau}'>"
-        f"<div style='font-size:13px;color:#64748b'>Khuyến nghị {'ngắn hạn (D)' if kn.tam == 'D' else 'trung hạn (W)'}</div>"
+        f"<div style='font-size:13px;color:#64748b'>Khuyến nghị {TEN_TAM.get(kn.tam, kn.tam)}</div>"
         f"<div style='font-size:26px;font-weight:700;color:{mau}'>{kn.muc}</div>"
         + (f"<div style='font-size:15px'>Vùng mua đẹp: <b>{kn.vung.thap:,.0f} – {kn.vung.cao:,.0f}</b></div>"
            if kn.vung else "") + "</div>", unsafe_allow_html=True)
@@ -207,14 +208,14 @@ def the_tin_hieu_dinh(t, so_luong_dang_giu: float | None = None, gia_von: float 
 @st.cache_resource
 def kho_thi_truong():
     """Kết quả quét dùng chung cho mọi người xem (lưu trong bộ nhớ máy chủ)."""
-    return {"luc": None, "ts": 0.0, "D": None, "W": None, "thong_ke": None}
+    return {"luc": None, "ts": 0.0, "D": None, "W": None, "M": None, "thong_ke": None}
 
 
 def doc_file_thi_truong(kho):
     if kho["D"] is None and FILE_TT.exists():
         data = json.loads(FILE_TT.read_text(encoding="utf-8"))
         kho.update(luc=data["luc"] + " (bản lưu sẵn)", thong_ke=data["thong_ke"], ts=0.0,
-                   **{k: pd.DataFrame(data.get(k, [])) for k in ("D", "W", "ban_D", "ban_W", "nganh_D", "nganh_W")})
+                   **{k: pd.DataFrame(data.get(k, [])) for k in ("D", "W", "M", "ban_D", "ban_W", "ban_M", "nganh_D", "nganh_W", "nganh_M")})
 
 
 def quet_ngay(kho, san, gtgd_min):
@@ -228,9 +229,9 @@ def quet_ngay(kho, san, gtgd_min):
         pass
     kho.update(luc=pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%H:%M %d/%m/%Y"), ts=time.time(),
                thong_ke=quet.thong_ke(kq),
-               **{t: quet.bang(kq, t) for t in ("D", "W")},
-               **{f"ban_{t}": quet.bang_ban(kq, t) for t in ("D", "W")},
-               **{f"nganh_{t}": quet.suc_manh_nganh(kq, t) for t in ("D", "W")})
+               **{t: quet.bang(kq, t) for t in ("D", "W", "M")},
+               **{f"ban_{t}": quet.bang_ban(kq, t) for t in ("D", "W", "M")},
+               **{f"nganh_{t}": quet.suc_manh_nganh(kq, t) for t in ("D", "W", "M")})
     thanh.empty()
 
 
@@ -682,7 +683,7 @@ def trang_theo_ngay():
                                 .replace("Thursday", "Thứ 5").replace("Friday", "Thứ 6").replace("Saturday", "Thứ 7")
                                 .replace("Sunday", "CN"), key="ls_ngay")
             ban = LS.doc_ngay(ngay, BAO_CAO / "lich_su")
-            st.caption(f"Bản quét lúc {ban.get('luc')} · tầm {'ngắn hạn (D)' if tam == 'D' else 'trung hạn (W)'} "
+            st.caption(f"Bản quét lúc {ban.get('luc')} · tầm {TEN_TAM.get(tam, tam)} "
                        "(đổi ở ⚙ Cài đặt chung)")
             loai = st.radio("Danh sách", ["Nên mua", "Bán ở đỉnh"], horizontal=True, key="ls_loai")
             with st.spinner("Đang tính hiệu quả đến nay…"):
@@ -1045,7 +1046,7 @@ def the_ket_luan(kq, kn, dinh, tc: dict | None, gt: dict, mh: dict | None = None
     st.markdown(
         f"<div style='padding:14px 16px;border-radius:14px;background:{mau};color:white'>"
         f"<div style='font-size:14px;opacity:.9'>{kq.ma} · giá {gd(kq.chinh.gia)} · "
-        f"{'ngắn hạn 1–3 tháng' if kn.tam == 'D' else 'trung hạn 3–9 tháng'} · điểm {kn.diem:+.0f}</div>"
+        f"{TEN_TAM.get(kn.tam, kn.tam)} · điểm {kn.diem:+.0f}</div>"
         f"<div style='font-size:28px;font-weight:800;line-height:1.2'>{chu}</div></div>", unsafe_allow_html=True)
     the_ke_hoach(kq, kn, gt)
     if dinh is not None and dinh.muc in ("Bán mạnh", "Chốt lời dần"):
@@ -1185,6 +1186,7 @@ def xem_ma(ma: str, noi: str):
         the_ket_luan(kq, kn, dinh, None, K.giai_thich(kq, kn, von), diem_mh(kq.ma))
         the_level1(kq, ck)
         the_dai_han(kq, ck)
+        the_backtest_ma(kq.ma)
         if st.toggle("🔎 Kiểm tra các lần công cụ báo Mua mã này trước đây (~5 giây)", key=f"tc_{noi}_{kq.ma}"):
             try:
                 with st.spinner("Đang mô phỏng lại các lần báo Mua trong ~2 năm…"):
@@ -1227,6 +1229,7 @@ def xem_ma(ma: str, noi: str):
             the_forex(kq)
         else:
             the_xu_huong(kq)
+        the_backtest_ma(kq.ma)
         khung_dinh = "4H" if kq.loai == "fx" else tam
         if khung_dinh in kq.frames:
             with st.expander("Tín hiệu đỉnh"):
@@ -1251,6 +1254,47 @@ def tai_song_song(ds: tuple):
 def thi_truong_chung():
     kq, _, _ = phan_tich_ma("VNINDEX")
     return kq
+
+
+@st.cache_data(show_spinner=False)
+def _bt_tung_ma(mtime):
+    f = BAO_CAO / "ket_qua_tung_ma.json"
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+
+
+BT_MA_KHAC = {"XAUUSD": "GC=F", "GOLD": "GC=F", "BTCUSD": "BTC-USD", "BTCUSDT": "BTC-USD"}
+
+
+def the_backtest_ma(ma: str):
+    """Kết quả backtest 3 công thức trên chính mã này (toàn bộ lịch sử, 100% vốn mỗi lệnh, đã trừ phí)."""
+    f = BAO_CAO / "ket_qua_tung_ma.json"
+    bt = _bt_tung_ma(f.stat().st_mtime if f.exists() else 0)
+    x = (bt.get("data") or {}).get(BT_MA_KHAC.get(ma, ma))
+    if not x:
+        return
+    ten = bt.get("strategies", {})
+    rows = []
+    phu = x.get("_", {})
+    for k, v in x.items():
+        if k.startswith("_") or not isinstance(v, dict) or "n" not in v:
+            continue
+        rows.append({"Công thức": ten.get(k, k), "Số lệnh": v["n"], "Thắng %": v["win"], "Lãi TB/lệnh %": v["avg"],
+                     "Tổng lãi %": v["total"], "Lãi/năm %": v["cagr"], "Sụt giảm tối đa %": v["mdd"],
+                     "Mua & giữ %": v["bh_total"], "Hơn mua & giữ": "✔" if v["beats"] else "✖",
+                     "Nửa đầu (tổng %)": (v.get("h1") or [None, None])[1], "Nửa sau (tổng %)": (v.get("h2") or [None, None])[1],
+                     "Giai đoạn": f"{v.get('tu', '')[:4]}–{v.get('den', '')[:4]}"})
+    with st.expander(f"📊 Backtest các công thức trên chính {ma}"):
+        st.dataframe(pd.DataFrame(rows).style.format(
+            {c: "{:+,.1f}" for c in ("Lãi TB/lệnh %", "Tổng lãi %", "Lãi/năm %", "Sụt giảm tối đa %", "Mua & giữ %",
+                                     "Nửa đầu (tổng %)", "Nửa sau (tổng %)")} | {"Thắng %": "{:.0f}"}, na_rep="–"),
+            hide_index=True, width="stretch")
+        if phu.get("illiq"):
+            st.warning("Mã thanh khoản thấp (< 1 tỷ/phiên): kết quả khó đạt được khi giao dịch thật.")
+        if phu.get("bh_cagr") is not None:
+            st.caption(f"Mua & giữ: {phu['bh_cagr']:+.1f}%/năm, sụt giảm tối đa {phu.get('bh_mdd', 0):.0f}%.")
+        st.caption("Toàn bộ lịch sử có dữ liệu, 100% vốn mỗi lệnh, đã trừ phí. Kiểm tra trên ~1.500 mã: chọn mã theo kết quả "
+                   "nửa đầu KHÔNG giúp nửa sau tốt hơn (công thức 'hợp' với mã trong quá khứ thường không còn hợp) → "
+                   "chỉ để tham khảo. Khung tháng chỉ có 2–3 lệnh/mã nên gần như ngẫu nhiên.")
 
 
 def chu_ky_nay() -> dict:

@@ -214,8 +214,12 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str | None = None, san: str | 
     atr = float(chi_bao.atr(df).iloc[-1])
     dd = diem_trong_so(kqk, df)
     dw = diem_trong_so(lon, df) if lon and lon.votes else 0.0     # giống lúc kiểm định: phạt ADX theo khung giữ lệnh
-    diem = (2 * dd + dw) / 3
-    lon_tang = bool(lon and lon.xu_huong == 1)
+    if KHUNG_LON.get(tam) is None:            # khung tháng: không có khung lớn hơn → dùng chính khung tháng
+        diem = dd
+        lon_tang = kqk.xu_huong == 1
+    else:
+        diem = (2 * dd + dw) / 3
+        lon_tang = bool(lon and lon.xu_huong == 1)
     ly_do = [f"Điểm động lượng khung {tam}: {dd:+.0f}" + (f", khung {lon.khung}: {dw:+.0f}" if lon else "")
              + f" → tổng {diem:+.0f}"]
     kn = KhuyenNghi(kq.ma, tam, "Theo dõi", gia, round(diem, 1), ly_do=ly_do)
