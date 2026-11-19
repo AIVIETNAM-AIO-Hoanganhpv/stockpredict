@@ -552,7 +552,9 @@
 
   // Mục tiêu chốt lời Fibo trên sóng của khung lệnh (W/M), tại ngày j: A đáy trước B, B đỉnh gần nhất (k=2, đã xác nhận),
   // C thấp nhất từ sau B đến j; hồi = (B−C)/(B−A) → 1.618 (<0,441) · 1.272 (<0,691) · 1.0; nâng mức nếu ≤ giá vào +1%.
-  App.fiboSong = function (D, X, j, giaVao, k = 2, tlCoDinh = null) {
+  // chat = true (chiến lược trung/dài hạn): đỉnh B phải ĐÃ XÁC NHẬN trên nến khung đó (k nến đã xong sau nó thấp hơn),
+  // kể cả khi đo sóng mới; độ hồi (B−C)/(B−A) ≥ 0,236, không đủ → coi như chưa có sóng.
+  App.fiboSong = function (D, X, j, giaVao, k = 2, tlCoDinh = null, chat = false) {
     let w = -1; for (let q = 0; q < X.B.n - 1; q++) if (X.cuoi[q] >= 0 && X.cuoi[q] <= j) w = q;
     if (w < 2 * k + 2) return null;
     const B_ = X.B; let ib = -1, ia = -1;
@@ -562,7 +564,8 @@
     if (ia < 0) return null;
     const thu = (A, B, C, moi) => {
       if (!(B > A && C >= A)) return null;
-      const sau = (B - C) / (B - A); const tl0 = sau < 0.441 ? 1.618 : sau < 0.691 ? 1.272 : 1.0;
+      const sau = (B - C) / (B - A); if (chat && sau < 0.236) return null;
+      const tl0 = sau < 0.441 ? 1.618 : sau < 0.691 ? 1.272 : 1.0;
       for (const x of (tlCoDinh ? [tlCoDinh] : [1.0, 1.272, 1.618, 2.0, 2.618])) { if (!tlCoDinh && x < tl0) continue; const tp = C + x * (B - A); if (tp > giaVao * 1.01) return { tp, tl: x, sau, A, B, C, moi }; }
       return null;
     };
@@ -572,7 +575,15 @@
     const cu = C > B_.l[ia] ? thu(B_.l[ia], B_.h[ib], C, false) : null;
     if (cu) return cu;
     // sóng cũ hỏng (phá đáy A) hoặc quá nhỏ so với giá → đo SÓNG MỚI: A = đáy thấp nhất sau đỉnh cũ, B = đỉnh cao nhất sau đó, C = đáy hồi sau B
-    const A = Math.min(C, B_.l[ia]); let ibd = ic, B = -Infinity;
+    const A = Math.min(C, B_.l[ia]);
+    if (chat) {   // B' = nến khung lớn có đỉnh cao nhất sau A', đã có k nến xong phía sau
+      let qa = ib; while (qa < w && X.cuoi[qa] < ic) qa++;
+      let qb = -1; for (let q = qa; q <= w - k; q++) if (qb < 0 || B_.h[q] > B_.h[qb]) qb = q;
+      if (qb < 0) return null;
+      let C2 = Infinity; for (let q = X.cuoi[qb] + 1; q <= j; q++) C2 = Math.min(C2, D.l[q]);
+      return isFinite(C2) ? thu(A, B_.h[qb], C2, true) : null;
+    }
+    let ibd = ic, B = -Infinity;
     for (let q = Math.max(0, ic); q <= j; q++) if (D.h[q] > B) { B = D.h[q]; ibd = q; }
     let C2 = D.l[j]; for (let q = ibd; q <= j; q++) C2 = Math.min(C2, D.l[q]);
     return thu(A, B, C2, true);
@@ -667,15 +678,19 @@
       // ADX(14) khung TUẦN của tuần đã xong gần nhất: xu hướng đủ mạnh (≥ ngưỡng) và DI+ > DI− (xu hướng tăng)
       const dmW = T.dmi(KW.B, 14, 14);
       const adxOk = j => { if (!(I.adx > 0)) return true; const w = tuanXong(j); return w >= 0 && dmW.adx[w] >= I.adx && dmW.plus[w] > dmW.minus[w]; };
-      const muc = j => App.fiboSong(D, KM, j, c[j], 2, 1.0) || App.fiboSong(D, KW, j, c[j], 2, 1.0);
+      const fiboM = j => App.fiboSong(D, KM, j, c[j], 2, 1.0, true), fiboW = j => App.fiboSong(D, KW, j, c[j], 2, 1.0, true);
       const R = {
         vt(j) {
           if (j < 30 || !P.dongPha[j] || !(c[j] > D.o[j])) return null;
           const ok = (I.vao !== 'MACD+Sto' && maLen(j)) || (I.vao !== '2MA' && (S.Mua1[j] || S.Mua2[j]));
           if (!ok) return null;
           if (!adxOk(j)) return null;
-          const fb = muc(j);
-          if (!fb || fb.tp < c[j] * (1 + lai)) { boQua.push({ i: j, tp: fb ? fb.tp : null }); return null; }
+          // sóng tháng VÀ sóng tuần (đỉnh đã xác nhận, hồi ≥ 23,6%) đều cho lãi dự kiến ≥ lai; giá đã hồi về vùng hỗ trợ
+          // (không cao hơn đáy hồi C + 50% đoạn C→B của sóng tuần) – không mua đuổi ở đỉnh
+          const fM = fiboM(j), fW = fiboW(j);
+          if (!fM || !fW || fM.tp < c[j] * (1 + lai) || fW.tp < c[j] * (1 + lai)) { boQua.push({ i: j, ly: '<' + I.lai + '%' }); return null; }
+          if (c[j] > fW.C + 0.5 * (fW.B - fW.C)) { boQua.push({ i: j, ly: 'Chờ hồi' }); return null; }
+          const fb = fM.tp < fW.tp ? fM : fW;
           const sl = dayTuan(j); if (sl == null) return null;
           return { stop: sl, tp: fb.tp };
         },
@@ -686,12 +701,12 @@
         },
         banPhan: null, banHet: i => P.banM[i], tenBan: 'Tín hiệu bán MACD+Sto tháng', veTp, tpChiVe: true,
         giuToiDa: (I.giu.startsWith('Dài') ? 3653 : 274) * 86400,
-        note: `Dài hạn: vào khi Ngày + Tuần + Tháng đồng pha và có tín hiệu mua khung ngày (${I.vao}), CHỈ khi ADX tuần ≥ ${I.adx} với DI+ > DI− và lãi dự kiến tới Fibo 1,0 của sóng tháng (không có thì sóng tuần) ≥ ${I.lai}%. Không tự bán ở Fibo: giữ đến tín hiệu bán MACD+Sto khung THÁNG, tối đa ${I.giu.startsWith('Dài') ? '10 năm' : '9 tháng'}; cắt lỗ ở đáy sóng tuần nhưng không quá ${I.catMax}%. Chấm xám = có tín hiệu mua nhưng lãi dự kiến < ${I.lai}% nên bỏ qua. Chưa kiểm định trên toàn thị trường.`
+        note: `Dài hạn: vào khi Ngày + Tuần + Tháng đồng pha và có tín hiệu mua khung ngày (${I.vao}), CHỈ khi ADX tuần ≥ ${I.adx} với DI+ > DI−, lãi dự kiến tới Fibo 1,0 của CẢ sóng tháng và sóng tuần ≥ ${I.lai}% (đỉnh sóng đã xác nhận, hồi ≥ 23,6%) và giá đã hồi về vùng hỗ trợ (≤ C + 50% đoạn C→B sóng tuần). Không tự bán ở Fibo: giữ đến tín hiệu bán MACD+Sto khung THÁNG, tối đa ${I.giu.startsWith('Dài') ? '10 năm' : '9 tháng'}; cắt lỗ ở đáy sóng tuần nhưng không quá ${I.catMax}%. Chấm xám = có tín hiệu mua nhưng bỏ qua (<${I.lai}%: lãi dự kiến thấp/chưa có sóng; Chờ hồi: giá đang xa vùng hỗ trợ). Chưa kiểm định trên toàn thị trường.`
       };
       const r = moPhongLo(D, R, I);
       const bo = []; let truoc = -99;
       boQua.forEach(b => { if (b.i - truoc > 10) { bo.push(b); truoc = b.i; } });
-      r.markers = r.markers.concat(bo.map(b => ({ i: b.i, pos: 'belowBar', shape: 'circle', color: '#9598a1', text: '<' + I.lai + '%' })));
+      r.markers = r.markers.concat(bo.map(b => ({ i: b.i, pos: 'belowBar', shape: 'circle', color: '#9598a1', text: b.ly })));
       r.draw = (g, X) => veTp.forEach(v => { const x1 = X.x(v.i), x2 = X.x(v.j != null ? v.j : D.n - 1); if (x1 == null || x2 == null) return;
         X.seg(g, x1, X.y(v.tp), x2, X.y(v.tp), '#089981', [5, 4], 1.5); X.label(g, x1 + 60, X.y(v.tp) - 9, 'Fibo 1,0 ' + App.fmtPrice(v.tp), '#089981'); });
       return r;

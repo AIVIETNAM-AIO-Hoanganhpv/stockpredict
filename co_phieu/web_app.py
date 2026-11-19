@@ -1025,7 +1025,11 @@ def the_ke_hoach(kq, kn, gt: dict, gon: bool = False):
     if fb:
         dai_han = fb["khung"] in ("W", "M")
         nhan = ("🎯 Lãi dự kiến (Fibo 1,0)" if dai_han else "🎯 Chốt lời Fibonacci")
-        canh = ("" if not dai_han else (" ✅ ≥ 10%" if fb.get("du_lai") else " ⛔ dưới 10% → KHÔNG vào lệnh"))
+        canh = ("" if not dai_han else (" ✅ cả sóng tuần và tháng ≥ 10%" if fb.get("du_lai") else
+                                        " ⛔ chưa đủ: cần cả sóng tuần và sóng tháng ≥ 10% → KHÔNG vào lệnh"))
+        if dai_han and fb.get("vung_ho_tro"):
+            canh += (f" · Vùng mua (đã hồi về hỗ trợ): ≤ {gd(fb['vung_ho_tro'])} "
+                     + ("✅" if fb.get("da_hoi") else "⛔ giá đang cao – chờ hồi"))
         giai = (" Không tự bán ở mức này: giữ đến khi khung THÁNG có tín hiệu bán MACD+Sto, hoặc chạm cắt lỗ."
                 if dai_han else " Vẫn bán sớm nếu có tín hiệu bán MACD+Sto hoặc chạm cắt lỗ.")
         html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>{nhan}: {gd(fb['chot_loi'])} "

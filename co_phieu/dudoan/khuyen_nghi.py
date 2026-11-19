@@ -664,17 +664,24 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
         if kq.frames.get("D") is not None and kn.gia_mua:
             fb = None
             if tam in ("W", "M"):
-                # Cổ phiếu dài hạn: chỉ mức 1,0 của sóng THÁNG (không có thì sóng tuần); lãi dự kiến < 10% → không vào
-                for kh_song in ("M", "W"):
-                    fb = F.muc_tieu_song(kq.frames["D"], kh_song, kn.gia_mua, ti_le_co_dinh=LAI_FIBO_TL)
-                    if fb:
-                        break
+                # Trung/dài hạn: Fibo 1,0 của CẢ sóng tháng và sóng tuần (đỉnh đã xác nhận, hồi ≥ 23,6%) đều phải ≥ 10%;
+                # giá phải hồi về vùng hỗ trợ (≤ C + 50% đoạn C→B của sóng tuần). Mục tiêu hiển thị = mức thấp hơn.
+                fm = F.muc_tieu_song(kq.frames["D"], "M", kn.gia_mua, ti_le_co_dinh=LAI_FIBO_TL, chat=True)
+                fw = F.muc_tieu_song(kq.frames["D"], "W", kn.gia_mua, ti_le_co_dinh=LAI_FIBO_TL, chat=True)
+                co = [x for x in (fm, fw) if x]
+                if co:
+                    fb = dict(min(co, key=lambda x: x["chot_loi"]))
+                    fb["du_hai_song"] = bool(fm and fw)
+                    fb["lai_thang"] = fm["lai_pct"] if fm else None
+                    fb["lai_tuan"] = fw["lai_pct"] if fw else None
+                    fb["vung_ho_tro"] = (fw["C"] + 0.5 * (fw["B"] - fw["C"])) if fw else None
+                    fb["da_hoi"] = bool(fw) and kn.gia_mua <= fb["vung_ho_tro"]
             else:
                 fb = F.muc_tieu_song(kq.frames["D"], tam, kn.gia_mua)
             if fb:
                 fb["chot_loi"] = lam_tron(fb["chot_loi"], loai_gia(kq.ma, kq.loai), xuong=False)
                 fb["lai_pct"] = fb["chot_loi"] / kn.gia_mua - 1
-                fb["du_lai"] = fb["lai_pct"] >= LAI_TOI_THIEU
+                fb["du_lai"] = fb["lai_pct"] >= LAI_TOI_THIEU and fb.get("du_hai_song", True)
                 ten_song = {"M": "tháng", "W": "tuần", "D": "ngày"}[fb["khung"]]
                 tl = str(fb["ti_le"]).replace(".", ",")
                 fb["vi_sao"] = (f"Sóng {ten_song}: đáy A {_d(fb['A'])} ({fb['ngay_A']:%m/%Y}) → đỉnh B {_d(fb['B'])} ({fb['ngay_B']:%m/%Y}), "

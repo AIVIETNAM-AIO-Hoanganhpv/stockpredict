@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 pd = pytest.importorskip("pandas")
+np = pytest.importorskip("numpy")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -77,3 +78,13 @@ def test_adx_tuan_tren_the_ke_hoach():
     gt = K.giai_thich(kq, kn["W"], 1e8)
     assert gt["tam"] == "W" and gt["adx_tuan"] and gt["adx_tuan"]["dat"] == (
         gt["adx_tuan"]["adx"] >= 25 and gt["adx_tuan"]["pdi"] > gt["adx_tuan"]["mdi"])
+
+
+def test_song_chat_khong_lay_dinh_dang_chay():
+    """Sóng 'chặt': đỉnh B phải đã xác nhận, hồi ≥ 23,6% – giá đang lập đỉnh mới thì không có sóng (không mua đuổi)."""
+    from dudoan import fibo as F
+    idx = pd.bdate_range("2022-01-03", periods=900)
+    c = np.r_[np.linspace(100, 50, 300), np.linspace(50, 150, 600)]     # giảm rồi tăng thẳng tới hôm nay
+    df = pd.DataFrame({"open": c, "high": c * 1.005, "low": c * 0.995, "close": c, "volume": 1e6}, index=idx)
+    assert F.muc_tieu_song(df, "M", float(c[-1]), ti_le_co_dinh=1.0, chat=True) is None
+    assert F.muc_tieu_song(df, "W", float(c[-1]), ti_le_co_dinh=1.0, chat=True) is None

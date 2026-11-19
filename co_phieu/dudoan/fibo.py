@@ -77,6 +77,7 @@ def plan(swing_high, swing_low, point3, up: bool, buffer: float = 0.0) -> FiboPl
 # ------------------------------------------------------------------ chốt lời Fibo theo sóng của khung lệnh
 NGUONG_TL = ((0.441, 1.618), (0.691, 1.272), (9.9, 1.0))     # hồi ~23,6–38,2% → 1.618 · ~50–61,8% → 1.272 · ~78,6% → 1.0
 BAC_TL = [1.0, 1.272, 1.618, 2.0, 2.618]
+HOI_TOI_THIEU = 0.236   # sóng "chặt": độ hồi tối thiểu
 
 
 def ti_le_theo_hoi(sau: float) -> float:
@@ -88,12 +89,13 @@ def ti_le_theo_hoi(sau: float) -> float:
 
 
 def muc_tieu_song(df_ngay, khung: str = "W", gia_vao: float | None = None, k: int | None = None,
-                  ti_le_co_dinh: float | None = None) -> dict | None:
+                  ti_le_co_dinh: float | None = None, chat: bool = False) -> dict | None:
     """Mục tiêu chốt lời Fibo đo trên sóng tăng gần nhất của khung lệnh (W: lệnh tuần, M: lệnh tháng, D: ngày).
     A = đáy trước đỉnh B, B = đỉnh gần nhất đã xác nhận (k nến mỗi bên), C = giá thấp nhất từ sau B đến nay.
     Độ sâu hồi = (B − C)/(B − A) → tỉ lệ 1.618 / 1.272 / 1.0; mục tiêu = C + tỉ lệ × (B − A).
     Nếu mục tiêu ≤ giá vào + 1% thì nâng lên mức kế tiếp (1.0 → 1.272 → 1.618 → 2.0 → 2.618).
-    `ti_le_co_dinh` (vd 1.0 – chiến lược dài hạn): chỉ dùng đúng mức đó, không nâng mức."""
+    `ti_le_co_dinh` (vd 1.0 – chiến lược dài hạn): chỉ dùng đúng mức đó, không nâng mức.
+    `chat` (chiến lược trung/dài hạn): đỉnh B phải đã xác nhận trên nến khung đó (cả khi đo sóng mới), độ hồi ≥ 0,236."""
     from . import level1
     b = level1.nen_khung(df_ngay, khung)
     k = k or (3 if khung == "D" else 2)
@@ -116,6 +118,8 @@ def muc_tieu_song(df_ngay, khung: str = "W", gia_vao: float | None = None, k: in
         if not (B > A and C >= A):
             return None
         sau = (B - C) / (B - A)
+        if chat and sau < HOI_TOI_THIEU:
+            return None
         tl0 = ti_le_theo_hoi(sau)
         for x in ([ti_le_co_dinh] if ti_le_co_dinh else BAC_TL):
             if ti_le_co_dinh:
@@ -139,6 +143,15 @@ def muc_tieu_song(df_ngay, khung: str = "W", gia_vao: float | None = None, k: in
         A2 = min(float(sau_b.min()), A)
     else:
         ngay_a, A2 = b.index[ia], A
+    if chat:    # B' = nến khung lớn có đỉnh cao nhất sau A' (nến chứa A' trở đi), đã có k nến xong phía sau
+        ung = [p for p in range(n - k) if b.index[p] >= ngay_a]
+        if not ung:
+            return None
+        qb = max(ung, key=lambda p: h[p])
+        sau_b2 = df_ngay.loc[df_ngay.index > b.index[qb], "low"]
+        if not len(sau_b2):
+            return None
+        return thu(A2, float(h[qb]), float(sau_b2.min()), ngay_a, b.index[qb], True)
     sau_a = df_ngay.loc[df_ngay.index >= ngay_a]
     ngay_b = sau_a["high"].idxmax()
     B2 = float(sau_a["high"].max())
