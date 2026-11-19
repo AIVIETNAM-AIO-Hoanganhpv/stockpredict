@@ -150,3 +150,17 @@ def LS_CO_BAN():
     import os
     from dudoan import lich_su
     return bool(lich_su.ds_ngay(Path(os.environ["CO_PHIEU_BAO_CAO"]) / "lich_su"))
+
+
+def test_nguon_doanh_nghiep_loi_khong_lam_dung_app(gia_gia, monkeypatch):
+    """Như trên Streamlit Cloud: API doanh nghiệp trả 403 → chỉ báo trong mục đó, app vẫn chạy."""
+    import urllib.error
+    from dudoan import co_ban
+
+    def loi(duong_dan):
+        raise urllib.error.HTTPError(duong_dan, 403, "Forbidden", {}, None)
+    monkeypatch.setattr(co_ban, "_goi", loi)
+    co_ban._bo_nho.clear()
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=180).run()
+    assert not at.exception, at.exception
+    assert any("mã lỗi 403" in i.value for i in at.info)

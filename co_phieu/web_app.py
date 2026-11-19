@@ -243,6 +243,15 @@ def cb_excel(ma):
     return p.read_bytes()
 
 
+def loi_nguon(e, muc: str):
+    """Thông báo thân thiện khi một nguồn dữ liệu phụ bị lỗi (app vẫn chạy tiếp)."""
+    ma_loi = getattr(e, "code", None)
+    goi_y = {403: "nguồn từ chối truy cập từ máy chủ này", 429: "gọi quá nhiều lần, thử lại sau ít phút",
+             404: "không có dữ liệu cho mã này"}.get(ma_loi, "lỗi kết nối")
+    st.info(f"Chưa lấy được {muc}: {goi_y}" + (f" (mã lỗi {ma_loi})" if ma_loi else f" ({type(e).__name__})")
+            + ". Các phần khác vẫn dùng bình thường.")
+
+
 def sao(x):
     if x is None:
         return "–"
@@ -255,7 +264,11 @@ def ty(x):
 
 
 def muc_doanh_nghiep(ma):
-    hs, cd = cb_ho_so(ma)
+    try:
+        hs, cd = cb_ho_so(ma)
+    except Exception as e:
+        loi_nguon(e, "thông tin doanh nghiệp")
+        return
     if not hs:
         st.info("Không có thông tin doanh nghiệp cho mã này.")
         return
@@ -282,7 +295,11 @@ def muc_doanh_nghiep(ma):
     if not cd.empty:
         st.markdown("##### Cổ đông lớn")
         st.dataframe(cd.style.format({"Số CP": "{:,.0f}", "Tỷ lệ %": "{:.2f}%"}), hide_index=True, width="stretch")
-    mr = cb_mo_rong(ma)
+    try:
+        mr = cb_mo_rong(ma)
+    except Exception as e:
+        loi_nguon(e, "hồ sơ mở rộng")
+        mr = {}
     so = {"Số CP": "{:,.0f}", "Tỷ lệ %": "{:.3f}%", "Sở hữu %": "{:.2f}%", "Vốn điều lệ (tỷ)": "{:,.1f}",
           "Vốn góp (tỷ)": "{:,.1f}", "Cổ tức %": "{:.2f}%", "Tiền/CP (đ)": "{:,.0f}", "Đăng ký": "{:,.0f}",
           "Thực hiện": "{:,.0f}", "Sở hữu sau GD": "{:,.0f}"}
@@ -352,8 +369,12 @@ def html_esc(s):
 
 
 def muc_tin_tuc(ma, ten):
-    with st.spinner("Đang tìm tin…"):
-        ds, dn = tin_ma(ma, ten)
+    try:
+        with st.spinner("Đang tìm tin…"):
+            ds, dn = tin_ma(ma, ten)
+    except Exception as e:
+        loi_nguon(e, "tin tức")
+        return
     st.caption("Tin từ nhiều báo (Google News). Nhãn Tích cực/Tiêu cực tự động theo từ khóa – chỉ để tham khảo.")
     dem = {k: sum(t.cam_xuc == k for t in ds) for k in (1, -1)}
     c1, c2, c3 = st.columns(3)
@@ -371,7 +392,7 @@ def muc_tai_chinh(ma):
     try:
         sk, quy = cb_suc_khoe(ma)
     except Exception as e:
-        st.info(f"Không có báo cáo tài chính: {e}")
+        loi_nguon(e, "báo cáo tài chính")
         return
     if not quy.empty:
         import plotly.graph_objects as go
@@ -385,14 +406,22 @@ def muc_tai_chinh(ma):
     c1, c2 = st.columns(2)
     phan = c1.selectbox("Báo cáo", list(CB.TEN_PHAN), format_func=CB.TEN_PHAN.get, key=f"bctc_phan_{ma}")
     ky = c2.radio("Kỳ", ["Năm", "Quý"], horizontal=True, key=f"bctc_ky_{ma}")
-    b = cb_bctc(ma, phan, ky == "Quý")
+    try:
+        b = cb_bctc(ma, phan, ky == "Quý")
+    except Exception as e:
+        loi_nguon(e, "báo cáo tài chính")
+        return
     if b.empty:
         st.info("Không có dữ liệu.")
     else:
         st.caption("Đơn vị: tỷ đồng (EPS: đồng)")
         st.dataframe(b.drop(columns="_ma").set_index("Chỉ tiêu").style.format("{:,.1f}", na_rep="–"),
                      width="stretch", height=480)
-    st.download_button("⬇ Tải BCTC & chỉ số (Excel)", cb_excel(ma), file_name=f"{ma}_tai_chinh.xlsx",
+    try:
+        du_lieu_xlsx = cb_excel(ma)
+    except Exception:
+        return
+    st.download_button("⬇ Tải BCTC & chỉ số (Excel)", du_lieu_xlsx, file_name=f"{ma}_tai_chinh.xlsx",
                        width="stretch", key=f"bctc_xlsx_{ma}")
 
 
@@ -401,7 +430,7 @@ def muc_chi_so(ma, noi="tc"):
         sk, _ = cb_suc_khoe(ma)
         bang_q, moi = cb_chi_so(ma, True)
     except Exception as e:
-        st.info(f"Không có chỉ số tài chính: {e}")
+        loi_nguon(e, "chỉ số tài chính")
         return
     if sk.du_lieu:
         st.markdown(f"#### Sức khỏe tài chính: {sk.tong}/5")
@@ -429,7 +458,11 @@ def muc_chi_so(ma, noi="tc"):
             ls = moi["pe_lich_su"]
             st.caption(f"P/E 5 năm: thấp nhất {min(ls):.1f} · trung vị {pd.Series(ls).median():.1f} · cao nhất {max(ls):.1f}")
     ky = st.radio("Kỳ", ["Quý (4 quý gần nhất)", "Năm"], horizontal=True, key=f"cs_ky_{noi}_{ma}")
-    b = bang_q if ky.startswith("Quý") else cb_chi_so(ma, False)[0]
+    try:
+        b = bang_q if ky.startswith("Quý") else cb_chi_so(ma, False)[0]
+    except Exception as e:
+        loi_nguon(e, "chỉ số theo năm")
+        return
     if not b.empty:
         st.caption("Đơn vị: % với ROE, ROA, biên LN, cổ tức, NIM, NPL, CASA; lần (x) với P/E, P/B, nợ.")
         st.dataframe(b.set_index("Chỉ số").style.format("{:,.2f}", na_rep="–"), width="stretch")
