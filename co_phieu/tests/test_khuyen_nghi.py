@@ -237,3 +237,15 @@ def test_giao_dich_cat_lo_truoc_khi_cung_phien():
     c = np.array([100, 100, 100.0])
     lai, kq, _ = KD._giao_dich(o, h, l, c, 1, 100, 90, 110, 2)
     assert kq == "cắt lỗ" and lai < -0.09                 # cùng phiên chạm cả hai → tính cắt lỗ
+
+
+def test_kiem_dinh_co_suc_khoe_tai_chinh():
+    """Có BCTC (FPT mẫu) → mỗi điểm có sức khỏe tài chính; bước tổng hợp không lỗi."""
+    from dudoan import co_ban, kiem_dinh as KD
+    df = gia_vn(1.0, n=700)
+    df.index = pd.date_range(end="2026-11-18", periods=len(df), freq="B")
+    quy = co_ban.gan_gia_cong_bo(co_ban._chuoi_quy("FPT"), df)
+    r = KD.kiem_dinh_ma("FPT", df, buoc=20, so_diem=10, quy=quy, ho_so=co_ban.ho_so_raw("FPT"))
+    assert any(x[3] is not None for x in r["goc"])
+    t = KD.tong_hop([r, r])
+    assert len(t["theo_suc_khoe"]) == 4 and "Kết hợp sức khỏe" in KD.markdown(t, "thử")

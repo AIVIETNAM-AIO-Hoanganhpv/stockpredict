@@ -120,7 +120,7 @@ NHOM_SK = [("Sức khỏe ≥ 4 & đang lãi", lambda sk: sk and not sk[1] and s
 
 def tong_hop(ket_qua: list[dict]) -> dict:
     mua = [x for r in ket_qua for x in r["mua"]]
-    goc = np.array([x for r in ket_qua for x in r["goc"]])
+    goc = np.array([x[:3] for r in ket_qua for x in r["goc"]], dtype=float).reshape(-1, 3)
     ban = [x for r in ket_qua for x in r["ban"]]
     td = np.array([x for r in ket_qua for x in r["theo_doi_dinh"]])
     km = np.array([x for r in ket_qua for x in r["khong_mua"]])
