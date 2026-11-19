@@ -215,3 +215,57 @@ Rules:
   - Because of that exception the phase name alone does not decide "good". `pha_2000_tot.json` gives [date, phase, tot] at every change of either.
 - **Caveat:** before 2006 no stock passes the liquidity filter, so the index is flat and the phase is "Giảm" until 2006-03.
 - Excel: new sheets `v4 pha thi truong - tong hop`, `v4 so voi ngau nhien`, `v4 theo nam`, `v4 danh sach lenh`.
+
+---
+
+## v5 = "only sell in profit, never at a loss" (added 2026-11-19, user's choice). Code: `v5.py`, `v5report.py`; all tables in `tables_v5.md`
+Rules:
+- **Entries** as in v4: good phase only; candidates = đồng pha + weekly ADX ≥ 25 with DI+ > DI− + liquidity ≥ 1 bn VND per day.
+  - (a) also needs the daily trigger; (c) has no trigger.
+  - Ranking by weekly ADX (the v4 pick made on TRAIN).
+- **Sizing:** max 10 names; each new position = 10 % of equity (or the cash left).
+- **Sell reasons:** the phase is bad (active every bad day), or a monthly MACD+Sto sell (stays pending once it fires).
+  - A reason executes at the next open only if the position is in net profit at that close: close × (1 − 0.25 %) > fill × (1 + 0.15 %).
+  - No stop loss. After 10 years the position is sold at the next open whatever the price. A losing position keeps its slot.
+
+**Verdict.**
+- **v5 "wins" on almost every closed trade but loses as a portfolio.**
+  - 89–96 % of closed trades are in profit (average +7 % to +12 %).
+  - The losers are never sold: they pile up and lock the slots.
+- **Worse than the plain phase filter in every period:**
+  - (a): TRAIN −0.7 %, TEST +4.2 %, FULL +0.3 %/yr, max drawdown −53 %.
+  - (c): TRAIN +1.9 %, TEST +5.8 %, FULL +2.9 %/yr, max drawdown −37 %.
+  - Phase filter: +11.5 / +10.6 / +11.1 %/yr, max drawdown −38 %. TEST is also below EW buy & hold (+7.3 %).
+- **Random picks from the same pool:**
+  - (c): random runs do as well (mean TEST +5.8 %; 70 % of runs ≥ real on FULL).
+  - (a): TEST is better than random (1.5 % of runs ≥ real), but FULL is not (63 %) and the level, +4.2 %/yr, is low.
+- **Stuck capital:**
+  - On 2026-11-19 all 10 open positions are at a loss, in both variants: unrealized −1.32 bn VND for (a) and −1.85 bn for (c). Final equity is 1.08 bn and 2.13 bn.
+  - Worst positions: DIC −93 %, APC −94 %, TJC −84 % (TRAIN), FIR −90 % (TEST).
+  - On average 30 % of capital sits in losing positions (TEST ≈ 50 %).
+  - All 10 slots hold losers on 21–25 % of all days (36–39 % of TEST days). Since 2013 that happens in every year (14 years for (a), 16 for (c)), so most of the time the strategy cannot buy anything new.
+- **Holding time:** median 33–39 days for closed trades, average 205–244 days because of the long stuck positions.
+- **Concentration:** without its best symbol (DLG / CSC), FULL is +0.1 % / +2.9 %.
+- **Per year:** 2022 −45 % (a) and −24 % (c), against +6 % for the phase filter. Losers cannot be cut, so the crash is held to the bottom.
+
+| | TRAIN | TEST | FULL | max DD FULL | closed trades in profit | open at end with a loss (unrealized) | random runs ≥ real (TEST / FULL) |
+|---|---|---|---|---|---|---|---|
+| v5 (a) daily trigger | −0.7 % | +4.2 % | +0.3 % | −53 % | 89 % of 151 | 10 of 10 (−1.32 bn) | 1.5 % / 63 % |
+| v5 (c) no trigger | +1.9 % | +5.8 % | +2.9 % | −37 % | 94 % of 206 | 10 of 10 (−1.85 bn) | 48 % / 71 % |
+| phase filter | +11.5 % | +10.6 % | +11.1 % | −38 % | | | |
+| EW buy & hold | −8.4 % | +7.3 % | −1.0 % | −88 % | | | |
+
+**Per symbol (100 % of capital in one stock, same rules):**
+- (a): 525 of 1,505 symbols trade. Of these, 84 % have every closed trade in profit, but 18 % are now stuck in an open losing trade (median −58 %). Only 39 % of symbols beat their own buy & hold (36 % of the traded ones).
+- (c): 710 symbols trade. 67 % have every closed trade in profit, 38 % are stuck in a losing trade (median −55 %), and 38 % beat buy & hold.
+
+**Survivorship stress (read this):**
+- The data has **no symbol that stopped trading before 2024**. Delistings from 2000–2023 are simply missing.
+- 182 symbols stop before 2026-10-20 (33 in 2024, 14 in 2025, 135 in 2026; some are only suspended or sparse).
+- In the main run, a position in a stock that stops trading is valued at its last close for ever and keeps its slot.
+- Stress run: write such positions off to 0 on the day after their last trade.
+  - (c) FULL drops to +2.6 %/yr (max drawdown −40 %); worst position PCG −100 %.
+  - (a) is unchanged: it held none of these stocks.
+- Because older delisted stocks (often the ones that fell and never recovered) are missing, **"never sell at a loss" is flattered here**. In reality some stuck positions would have gone to zero.
+
+Excel: new sheets `v5 chi ban khi lai - tong hop`, `v5 danh sach lenh`, `v5 theo nam`, `v5 tung ma`.
