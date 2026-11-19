@@ -132,7 +132,8 @@ def bieu_do_plotly(kq, tab):
 
 
 # ------------------------------------------------------------------------------------------ khuyến nghị
-TAM = {"Ngắn hạn – khung ngày (1–3 tháng)": "D", "Trung hạn – khung tuần (3–9 tháng)": "W"}
+TAM = {"Trung hạn – khung tuần (3–9 tháng)": "W",
+       "Ngắn hạn – khung ngày (chỉ tham khảo, không khuyên dùng cho chứng khoán)": "D"}
 # Thư mục báo cáo (đổi được bằng biến môi trường CO_PHIEU_BAO_CAO – test dùng thư mục tạm, không ghi đè dữ liệu thật)
 BAO_CAO = Path(os.environ.get("CO_PHIEU_BAO_CAO", HERE / "bao_cao"))
 FILE_TT = BAO_CAO / "thi_truong.json"
@@ -1313,7 +1314,7 @@ def the_level1(kq, ck):
         return
     tot = (ck or {}).get("nen_cam_co_phieu", True)
     rows = []
-    for k in ("D", "W", "M"):
+    for k in ("W", "M", "D"):          # chứng khoán đánh khung tuần & tháng; ngày chỉ tham khảo
         try:
             t = L1.trang_thai(df, k, tk_ck, tot)
         except Exception:
@@ -1326,7 +1327,7 @@ def the_level1(kq, ck):
                      "Kiểm định": t.get("kiem_dinh")})
     if not rows:
         return
-    with st.expander("📘 Theo công thức LEVEL 1 (khung ngày / tuần / tháng)", expanded=False):
+    with st.expander("📘 Theo công thức LEVEL 1 (khung tuần / tháng; ngày chỉ tham khảo)", expanded=False):
         st.dataframe(pd.DataFrame(rows).style.format(
             {c: "{:,.0f}" for c in ("Giá vào", "Cắt lỗ", "CP lệnh vị thế", "Vào xác nhận", "Cắt lỗ xác nhận",
                                     "CP xác nhận")}, na_rep="–"), hide_index=True, width="stretch")

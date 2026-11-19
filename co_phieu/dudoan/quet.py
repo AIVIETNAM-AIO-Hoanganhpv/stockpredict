@@ -257,7 +257,7 @@ def tin_hieu_level1(ket_qua: list[KetQuaMa], thi_truong_tot: bool, von: float = 
                            "Giá": round(t["gia"], 0), "Giá vào": round(t["vao"], 0), "Cắt lỗ": round(t["cat_lo"], 0),
                            "Nhịp": t["nhip"], "Đồng pha": t["dong_pha"], "CP vị thế (1 tỷ)": t["cp_vi_the"],
                            "CP xác nhận (1 tỷ)": t.get("cp_xac_nhan"), "GTGD (tỷ)": _so(r.gtgd / 1e9, 1)})
-    return sorted(ra, key=lambda x: ("DWM".index(x["Khung"]), -(x["GTGD (tỷ)"] or 0)))
+    return sorted(ra, key=lambda x: ("WMD".index(x["Khung"]), -(x["GTGD (tỷ)"] or 0)))   # tuần, tháng trước; ngày tham khảo
 
 
 def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
