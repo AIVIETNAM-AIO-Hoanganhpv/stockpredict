@@ -44,3 +44,15 @@ def test_diem_mo_hinh():
     assert -0.2 < m["vuot_tb_20"] < 0.2 and 0 <= m["ti_le_thang_20"] <= 1
     with pytest.raises(ValueError):
         M.diem_mo_hinh(df.iloc[:100])
+
+
+def test_fibo_theo_song():
+    """Hồi ít thì lên nhiều: sóng A→B, hồi về C; mục tiêu > giá vào; phá đáy A → đo sóng mới."""
+    from dudoan import fibo as F
+    assert F.ti_le_theo_hoi(0.3) == 1.618 and F.ti_le_theo_hoi(0.6) == 1.272 and F.ti_le_theo_hoi(0.8) == 1.0
+    df = gia_gia_lap(1.0, n=400, seed=7, freq="B") * [300, 300, 300, 300, 1]
+    for khung in ("W", "M"):
+        x = F.muc_tieu_song(df, khung, float(df.close.iloc[-1]))
+        if x:
+            assert x["B"] > x["A"] and x["C"] >= x["A"] and x["chot_loi"] > df.close.iloc[-1] * 1.01
+            assert x["ti_le"] in F.BAC_TL
