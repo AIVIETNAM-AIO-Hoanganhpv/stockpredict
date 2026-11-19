@@ -69,7 +69,7 @@ def test_danh_gia_vi_the():
 @pytest.fixture
 def thi_truong_gia(monkeypatch, tmp_path):
     ds = pd.DataFrame({"ma": ["AAA", "BBB", "CCC", "DDD"], "san": ["HSX", "HNX", "UPCOM", "HSX"],
-                       "ten": ["A", "B", "C", "D"]})
+                       "ten": ["A", "B", "C", "D"], "nganh": ["Ngân hàng", "Bất động sản", "Y tế", "Y tế"]})
     monkeypatch.setattr(du_lieu, "danh_sach_ma_vn", lambda san=None, lam_moi=False: ds[ds.san.isin(san)])
 
     def fake(ma, khung="D", so_nen=1300):
@@ -87,7 +87,8 @@ def thi_truong_gia(monkeypatch, tmp_path):
 def test_quet_va_ghi(thi_truong_gia):
     kq = quet.quet(gtgd_min=1e6, so_luong=2)
     tk = quet.thong_ke(kq)
-    assert tk == {"tong": 4, "phan_tich": 2, "thanh_khoan_thap": 1, "loi": 1, "tang": tk["tang"], "giam": tk["giam"]}
+    assert {k: tk[k] for k in ("tong", "phan_tich", "thanh_khoan_thap", "loi")} == \
+        {"tong": 4, "phan_tich": 2, "thanh_khoan_thap": 1, "loi": 1}
     b = quet.bang(kq, "D", von=50e6)
     assert list(b["Mã"])[-1] == "BBB"                 # "Không mua" xếp cuối
     assert b["Hạng"].is_monotonic_decreasing
@@ -101,3 +102,58 @@ def test_cli_quet(thi_truong_gia, capsys):
     rc = du_doan.main(["--quet-thi-truong", "--gtgd", "0.001", "--thu-muc", str(thi_truong_gia / "bc")])
     out = capsys.readouterr().out
     assert rc == 0 and "NGẮN HẠN" in out and (thi_truong_gia / "bc" / "khuyen_nghi.md").exists()
+
+
+def gia_dinh(seed=5):
+    """Tăng mạnh nhiều nhịp rồi tạo đỉnh: cây nến râu trên dài, Stoch quá mua."""
+    df = gia_vn(1.0, n=400, seed=seed)
+    o, h, c = df["open"].iloc[-2], df["high"].iloc[-1], df["close"].iloc[-2]
+    top = df["high"].iloc[-30:].max()
+    df.iloc[-1, df.columns.get_loc("open")] = c
+    df.iloc[-1, df.columns.get_loc("high")] = top * 1.06            # vượt đỉnh cũ (quét thanh khoản)
+    df.iloc[-1, df.columns.get_loc("close")] = c * 0.995             # đóng cửa quay xuống → râu trên dài
+    df.iloc[-1, df.columns.get_loc("low")] = c * 0.99
+    del o, h
+    return df
+
+
+def test_tin_hieu_dinh():
+    kq, _ = quet.phan_tich_df("TOP", gia_dinh())
+    t = K.tin_hieu_dinh(kq, "D")
+    assert t.so_dau_hieu >= 2, t.dau_hieu
+    assert any("râu trên" in d or "Quét thanh khoản" in d for d in t.dau_hieu)
+    assert t.muc in K.MUC_BAN and t.hang >= 1
+    if t.vung_ban:
+        assert t.vung_ban[0] <= t.vung_ban[1] and t.gia_ban >= t.vung_ban[0]
+    # cổ phiếu đã giảm sâu thì không còn ở đỉnh
+    kq2, _ = quet.phan_tich_df("BBB", gia_vn(-0.3, seed=2))
+    assert K.tin_hieu_dinh(kq2, "D").muc in ("Chưa có đỉnh", "Theo dõi đỉnh")
+
+
+def test_nguong_dinh_nhay_hon():
+    kq, _ = quet.phan_tich_df("TOP", gia_dinh())
+    assert K.tin_hieu_dinh(kq, "D", nguong=2).hang >= K.tin_hieu_dinh(kq, "D", nguong=4).hang
+
+
+def test_danh_muc_ban_o_dinh():
+    kq, kn = quet.phan_tich_df("TOP", gia_dinh())
+    t = K.tin_hieu_dinh(kq, "D")
+    t.muc = "Bán mạnh"
+    t.gia_ban = kq.khung[-1].gia * 1.02
+    v = K.danh_gia_vi_the(kq.khung[-1].gia * 0.7, 1000, kq, kn["D"], dinh=t)
+    assert v["goi_y"] == "Bán ở đỉnh" and v["lai_neu_ban"] > v["lai"] > 0
+
+
+def test_nganh_va_bang_ban(thi_truong_gia):
+    kq = quet.quet(gtgd_min=1e6, so_luong=2)
+    ng = quet.suc_manh_nganh(kq)
+    assert set(ng["Ngành"]) == {"Ngân hàng", "Bất động sản"}
+    assert ng["Sức mạnh"].is_monotonic_decreasing and list(ng["Hạng"]) == [1, 2]
+    assert ng.iloc[0]["Ngành"] == "Ngân hàng"            # AAA tăng, BBB giảm
+    b = quet.bang(kq, "D")
+    assert "Ngành" in b and "Tín hiệu đỉnh" in b
+    assert any("Ngành" in x for x in b["Lý do"])
+    bb = quet.bang_ban(kq, "D")
+    assert bb.empty or bb["Hạng"].is_monotonic_decreasing
+    data = quet.ghi(thi_truong_gia, kq)
+    assert {"ban_D", "ban_W", "nganh_D", "nganh_W"} <= set(data)

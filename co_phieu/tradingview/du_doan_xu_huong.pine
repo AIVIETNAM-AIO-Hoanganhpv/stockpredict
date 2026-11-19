@@ -1,4 +1,4 @@
-// Dự đoán xu hướng – Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1
+// Dự đoán xu hướng – Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1 · tín hiệu bán ở đỉnh
 // Bản backtest cho TradingView, cùng cách chấm điểm với công cụ Python (thư mục co_phieu/).
 //
 // Cách dùng: TradingView → Pine Editor → dán toàn bộ file → "Add to chart"
@@ -23,6 +23,12 @@ atrSl    = input.float(2.0, "Cắt lỗ dự phòng (x ATR)", minval=0.5, step=0
 atrTp    = input.float(3.0, "Chốt lời dự phòng (x ATR)", minval=0.5, step=0.5, group=grpR)
 thoatNgang = input.bool(false, "Thoát lệnh khi điểm về vùng Đi ngang", group=grpR)
 tuNgay   = input.time(timestamp(2018, 1, 1, 0, 0), "Backtest từ ngày", group=grpR)
+
+grpD = "Tín hiệu bán ở đỉnh"
+dungDinh     = input.bool(true, "Phát hiện đỉnh", group=grpD)
+nguongDinh   = input.int(3, "Số dấu hiệu tối thiểu (3 = cân bằng)", minval=2, maxval=6, group=grpD)
+thoatKhiDinh = input.bool(true, "Thoát lệnh Mua khi có tín hiệu đỉnh", group=grpD)
+banKhiDinh   = input.bool(true, "Mở lệnh Bán khi có tín hiệu đỉnh (nếu Chiều lệnh cho phép Bán)", group=grpD)
 
 grpH = "Hiển thị"
 hienBang = input.bool(true, "Hiện bảng điểm", group=grpH)
@@ -225,6 +231,71 @@ sauBan = bienBan > 0 ? math.max(0.0, math.min(1.0, (diem3Ban - l1) / bienBan)) :
 tpBanFibo = diem3Ban - bienBan * f_tiLe(sauBan)
 slBanFibo = diem3Ban + 0.3 * atrV
 
+// ───────────────────────── Tín hiệu bán ở đỉnh ─────────────────────────
+// Dấu hiệu: Fibonacci mở rộng 1.272, Stoch/MFI quá mua, phân kỳ giảm MACD, quét thanh khoản đỉnh,
+// chạm FVG giảm (vùng cung), CHoCH giảm, nến đảo chiều, đã chạy ≥ 3 nhịp tăng
+phD = ta.pivothigh(high, kPivot, kPivot)
+plD = ta.pivotlow(low, kPivot, kPivot)
+[mD, sD, hD] = ta.macd(close, 12, 26, 9)
+var float dH1 = na
+var float dH2 = na
+var float mH1 = na
+var float mH2 = na
+var int dH1Bar = na
+var int soNhip = 0
+var float dDay = na
+var int dDayBar = na
+var float extDinh = na
+var float extDayTruoc = na
+var float ext1272 = na
+if not na(phD)
+    soNhip := not na(dH1) and phD > dH1 ? soNhip + 1 : 0
+    dH2 := dH1
+    mH2 := mH1
+    dH1 := phD
+    mH1 := mD[kPivot]
+    dH1Bar := bar_index - kPivot
+    extDinh := phD
+    extDayTruoc := dDay
+    ext1272 := na
+if not na(plD)
+    dDay := plD
+    dDayBar := bar_index - kPivot
+    if not na(dH1Bar) and dDayBar > dH1Bar and not na(extDayTruoc) and plD > extDayTruoc
+        ext1272 := plD + (extDinh - extDayTruoc) * 1.272
+
+var float fvGTop = na
+var float fvGBot = na
+if high < low[2]
+    fvGTop := low[2]
+    fvGBot := high
+if not na(fvGTop) and high >= fvGTop
+    fvGTop := na
+    fvGBot := na
+
+cao5 = ta.highest(high, 5)
+kD = ta.sma(ta.stoch(close, high, low, 14), 3)
+dD = ta.sma(kD, 3)
+mfD = ta.mfi(hlc3, 14)
+than = math.abs(close - open)
+rauTren = high - math.max(open, close)
+nenDao = (high - low > 0.5 * atrV and rauTren >= 2 * than and rauTren >= 0.5 * (high - low)) or (close < open and close[1] > open[1] and open >= close[1] and close <= open[1] and than > 0.5 * atrV)
+ganDinh = close >= ta.highest(high, 60) * 0.92
+choch = ta.barssince(vSmc < 0 and vSmc[1] > 0) <= 10
+
+dhFibo = not na(ext1272) and cao5 >= ext1272 - 0.3 * atrV
+dhStoch = ta.highest(kD, 3) > 80 and (kD < dD or kD > 90)
+dhMfi = math.sum(nz(volume), 30) > 0 and ta.highest(mfD, 3) > 80
+dhPhanKy = not na(dH2) and dH1 > dH2 and mH1 < mH2 and bar_index - dH1Bar <= 15
+dhQuet = not na(dH1[1]) and high > dH1[1] and close < dH1[1]
+dhCung = not na(fvGBot) and cao5 >= fvGBot - 0.2 * atrV and close <= fvGTop + 0.2 * atrV
+dhNen = ganDinh and (nenDao or nenDao[1])
+dhNhip = soNhip >= 3
+soDH = (dhFibo ? 1 : 0) + (dhStoch ? 1 : 0) + (dhMfi ? 1 : 0) + (dhPhanKy ? 1 : 0) + (dhQuet ? 1 : 0) + (dhCung ? 1 : 0) + (choch ? 1 : 0) + (dhNen ? 1 : 0) + (dhNhip ? 1 : 0)
+mucDinh = not dungDinh or not (ganDinh or choch) ? 0 : (soDH >= nguongDinh + 2 or (soDH >= nguongDinh and choch)) ? 3 : soDH >= nguongDinh ? 2 : soDH == nguongDinh - 1 ? 1 : 0
+tinHieuDinh = mucDinh >= 2 and mucDinh[1] < 2
+tenDinh = mucDinh == 3 ? "BÁN MẠNH" : mucDinh == 2 ? "CHỐT LỜI DẦN" : mucDinh == 1 ? "Theo dõi đỉnh" : "Chưa có đỉnh"
+
 // ───────────────────────────── Lệnh ─────────────────────────────
 trongKy = time >= tuNgay
 choMua = huong != "Chỉ Bán"
@@ -264,7 +335,19 @@ if strategy.position_size < 0
     if thoatNgang and xh == 0
         strategy.close("Bán", comment="Đi ngang")
 
+// Thoát lệnh Mua / mở lệnh Bán khi có tín hiệu đỉnh
+if trongKy and tinHieuDinh
+    if strategy.position_size > 0 and thoatKhiDinh
+        strategy.close("Mua", comment="Đỉnh (" + str.tostring(soDH) + " dấu hiệu)")
+    if banKhiDinh and choBan and strategy.position_size >= 0
+        sl := cao5 + 0.5 * atrV
+        tp := close - 2 * (sl - close)
+        strategy.entry("Bán", strategy.short, comment="Bán đỉnh")
+        strategy.exit("Thoát Bán", from_entry="Bán", limit=tp, stop=sl)
+
 // Cảnh báo (tạo Alert → chọn strategy này → "alert() function calls only")
+if tinHieuDinh
+    alert(syminfo.ticker + ": tín hiệu ĐỈNH – " + tenDinh + " (" + str.tostring(soDH) + " dấu hiệu)", alert.freq_once_per_bar_close)
 if tinHieuMua and choMua
     alert(syminfo.ticker + ": tín hiệu TĂNG, điểm " + str.tostring(diem, "#"), alert.freq_once_per_bar_close)
 if tinHieuBan and choBan
@@ -281,7 +364,9 @@ bgcolor(hienNen ? (xh == 1 ? color.new(color.green, 92) : xh == -1 ? color.new(c
 
 f_o(x) => na(x) ? "–" : (x > 0 ? "▲ " : x < 0 ? "▼ " : "■ ") + str.tostring(x, "#.##")
 
-var table bang = table.new(position.top_right, 2, 15, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 60))
+plotshape(trongKy and tinHieuDinh, "Tín hiệu đỉnh", shape.labeldown, location.abovebar, color.new(color.maroon, 0), text="ĐỈNH", textcolor=color.white, size=size.small)
+
+var table bang = table.new(position.top_right, 2, 16, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 60))
 if hienBang and barstate.islast
     mauXh = xh == 1 ? color.green : xh == -1 ? color.red : color.gray
     table.cell(bang, 0, 0, "Dự đoán", text_color=color.white)
@@ -314,3 +399,5 @@ if hienBang and barstate.islast
     table.cell(bang, 1, 13, f_o(vIct), text_color=color.white)
     table.cell(bang, 0, 14, "Chốt lời / Cắt lỗ", text_color=color.white)
     table.cell(bang, 1, 14, coLenh ? str.tostring(tp, format.mintick) + " / " + str.tostring(sl, format.mintick) : "–", text_color=color.white)
+    table.cell(bang, 0, 15, "Tín hiệu đỉnh (" + str.tostring(soDH) + ")", text_color=color.white)
+    table.cell(bang, 1, 15, tenDinh, text_color=color.white, bgcolor=mucDinh >= 2 ? color.maroon : mucDinh == 1 ? color.new(color.orange, 20) : na)

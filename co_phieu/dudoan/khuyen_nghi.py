@@ -1,4 +1,4 @@
-"""Điểm mua đẹp, khuyến nghị mua, tính lãi/lỗ theo số vốn và đánh giá danh mục đang nắm giữ.
+"""Điểm mua đẹp, khuyến nghị mua, tín hiệu bán ở đỉnh, tính lãi/lỗ theo số vốn và đánh giá danh mục.
 
 Vùng mua đẹp = nơi nhiều mức hỗ trợ trùng nhau (hợp lưu) ngay dưới giá hiện tại:
   Fibonacci hồi 0.5 / 0.618 / 0.705 (OTE) / 0.786 của nhịp tăng gần nhất,
@@ -22,6 +22,11 @@ MUC = ["Không mua", "Theo dõi", "Chờ về vùng mua", "Mua", "Mua mạnh"]  
 MAU_MUC = {"Mua mạnh": "#15803d", "Mua": "#16a34a", "Chờ về vùng mua": "#d97706",
            "Theo dõi": "#64748b", "Không mua": "#dc2626"}
 KHUNG_LON = {"D": "W", "W": "M", "4H": "D", "1H": "4H"}
+
+MUC_BAN = ["Chưa có đỉnh", "Theo dõi đỉnh", "Chốt lời dần", "Bán mạnh"]   # hạng 0..3
+MAU_BAN = {"Bán mạnh": "#b91c1c", "Chốt lời dần": "#dc2626", "Theo dõi đỉnh": "#d97706",
+           "Chưa có đỉnh": "#64748b"}
+NGUONG_DINH = 3          # số dấu hiệu tối thiểu để báo chốt lời (mức "Cân bằng")
 
 
 @dataclass
@@ -216,6 +221,142 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str = "vn") -> KhuyenNghi:
     return kn
 
 
+# ------------------------------------------------------------------------- tín hiệu đỉnh
+@dataclass
+class TinHieuDinh:
+    ma: str
+    tam: str
+    muc: str
+    gia: float
+    dau_hieu: list = field(default_factory=list)
+    vung_ban: tuple | None = None          # (thấp, cao)
+    gia_ban: float | None = None
+    gia_dinh: float | None = None          # đỉnh gần nhất (mất hiệu lực nếu giá đóng cửa vượt lên)
+
+    @property
+    def hang(self) -> int:
+        return MUC_BAN.index(self.muc)
+
+    @property
+    def so_dau_hieu(self) -> int:
+        return len(self.dau_hieu)
+
+
+def _nen_dao_chieu(df, atr) -> str | None:
+    o, h, l, c = (df[x].to_numpy() for x in ("open", "high", "low", "close"))
+    for j in (-1, -2):
+        than = abs(c[j] - o[j])
+        rau_tren = h[j] - max(o[j], c[j])
+        bien = h[j] - l[j]
+        if bien > 0.5 * atr and rau_tren >= 2 * max(than, 1e-9) and rau_tren >= 0.5 * bien:
+            return "Nến râu trên dài (nến búa ngược / sao băng)"
+        if (c[j] < o[j] and c[j - 1] > o[j - 1] and o[j] >= c[j - 1] and c[j] <= o[j - 1]
+                and than > 0.5 * atr):
+            return "Nến nhấn chìm giảm"
+        if (c[j] < o[j] and c[j - 1] > o[j - 1] and o[j] > h[j - 1] * 0.998
+                and c[j] < (o[j - 1] + c[j - 1]) / 2 and than > 0.5 * atr):
+            return "Mây đen che phủ (Dark Cloud Cover)"
+    return None
+
+
+def tin_hieu_dinh(kq: KetQua, tam: str = "D", loai: str = "vn",
+                  nguong: int = NGUONG_DINH) -> TinHieuDinh:
+    """Đếm dấu hiệu đỉnh trên khung `tam`. ≥ nguong dấu hiệu → Chốt lời dần; ≥ nguong+2 hoặc có
+    CHoCH giảm → Bán mạnh; nguong-1 → Theo dõi đỉnh."""
+    kqk = next((k for k in kq.khung if k.khung == tam), None)
+    df = kq.frames.get(tam)
+    if kqk is None or df is None or len(df) < 40 or not kqk.cau_truc:
+        return TinHieuDinh(kq.ma, tam, "Chưa có đỉnh", kq.khung[-1].gia if kq.khung else float("nan"))
+    gia = kqk.gia
+    atr = float(chi_bao.atr(df).iloc[-1])
+    st = kqk.cau_truc
+    hs = [x for x in st.swings if x.kind == "H"]
+    ls = [x for x in st.swings if x.kind == "L"]
+    dh = []
+    dinh_gan = float(df["high"].iloc[-60:].max())
+    gan_dinh = gia >= dinh_gan * 0.92          # chỉ xét khi giá còn ở gần vùng đỉnh
+    cao5 = float(df["high"].iloc[-5:].max())
+
+    # 1. Chạm Fibonacci mở rộng 1.272 / 1.618 của nhịp tăng trước
+    ext = None
+    if len(hs) >= 1 and ls:
+        h0 = hs[-1] if hs[-1].i < len(df) - 3 else (hs[-2] if len(hs) > 1 else None)
+        if h0:
+            truoc = [x for x in ls if x.i < h0.i]
+            sau = [x for x in ls if x.i > h0.i]
+            if truoc and sau and sau[-1].price > truoc[-1].price:
+                bien = h0.price - truoc[-1].price
+                ext = {r: sau[-1].price + bien * r for r in (1.0, 1.272, 1.618)}
+                for r in (1.618, 1.272):
+                    if cao5 >= ext[r] - 0.3 * atr:
+                        dh.append(f"Chạm Fibonacci mở rộng {r:g} ({ext[r]:,.0f})")
+                        break
+    # 2. Stoch / MFI quá mua
+    s = chi_bao.stoch(df)
+    k_, d_ = float(s["k"].iloc[-1]), float(s["d"].iloc[-1])
+    if s["k"].iloc[-3:].max() > 80 and (k_ < d_ or k_ > 90):
+        dh.append(f"Stoch quá mua ({s['k'].iloc[-3:].max():.0f})" + (" và cắt xuống" if k_ < d_ else ""))
+    mf = chi_bao.mfi(df)
+    if mf.notna().iloc[-1] and mf.iloc[-3:].max() > 80:
+        dh.append(f"MFI quá mua ({mf.iloc[-3:].max():.0f}) – dòng tiền vào quá nóng")
+    # 3. Phân kỳ giảm MACD: đỉnh sau cao hơn nhưng MACD thấp hơn
+    if len(hs) >= 2:
+        m = chi_bao.macd(df)["macd"].to_numpy()
+        a, b = hs[-2], hs[-1]
+        if b.price > a.price and m[b.i] < m[a.i] and len(df) - 1 - b.i <= 15:
+            dh.append("Phân kỳ giảm MACD (giá đỉnh cao hơn, MACD thấp hơn)")
+    # 4. SMC: quét thanh khoản đỉnh, chạm vùng cung (OB/FVG giảm), CHoCH giảm
+    if st.sweep == -1:
+        dh.append("Quét thanh khoản đỉnh cũ rồi đóng cửa quay xuống")
+    for z in st.order_blocks + st.fvgs:
+        if z.side < 0 and z.bottom - 0.2 * atr <= cao5 and gia <= z.top + 0.2 * atr:
+            dh.append(f"Chạm vùng cung {z.kind} giảm [{z.bottom:,.0f} – {z.top:,.0f}]")
+            break
+    choch = bool(st.events) and st.events[-1][1] == "CHoCH" and st.events[-1][2] < 0 \
+        and len(df) - 1 - st.events[-1][0] <= 10
+    if choch:
+        dh.append("CHoCH giảm – cấu trúc tăng bị phá")
+    # 5. Nến đảo chiều (LEVEL 1)
+    nen = _nen_dao_chieu(df, atr)
+    if nen and gan_dinh:
+        dh.append(nen)
+    # 6. Số nhịp (Nguyên lý II: thường đảo chiều ở nhịp 3, 4)
+    from .cau_truc import count_legs
+    legs = count_legs(st, 1) if st.trend == 1 else 0
+    if legs >= 3:
+        dh.append(f"Đã chạy {legs} nhịp tăng – hay đảo chiều ở nhịp 3–4")
+
+    th = TinHieuDinh(kq.ma, tam, "Chưa có đỉnh", gia, dh, gia_dinh=float(hs[-1].price) if hs else None)
+    n = len(dh)
+    if not gan_dinh and not choch:
+        th.muc = "Chưa có đỉnh"
+        th.dau_hieu = dh + ["Giá đã cách xa đỉnh 60 phiên (> 8%) – không còn ở vùng đỉnh"]
+    elif n >= nguong + 2 or (n >= nguong and choch):
+        th.muc = "Bán mạnh"
+    elif n >= nguong:
+        th.muc = "Chốt lời dần"
+    elif n == nguong - 1:
+        th.muc = "Theo dõi đỉnh"
+
+    # Vùng bán đẹp: hợp lưu kháng cự quanh/ trên giá
+    ung = []
+    if ext:
+        ung += [(v, f"Fibo mở rộng {r:g}") for r, v in ext.items()]
+    ung += [(x.price, "Đỉnh cũ") for x in hs[-4:]]
+    ung += [((z.top + z.bottom) / 2, f"{z.kind} giảm") for z in st.order_blocks + st.fvgs if z.side < 0]
+    ung = [(p, t) for p, t in ung if gia - 0.3 * atr <= p <= gia + 4 * atr]
+    if ung:
+        best = max(([(q, t) for q, t in ung if abs(q - p) <= 0.6 * atr] for p, _ in ung),
+                   key=lambda c: (len({t.split()[0] for _, t in c}), -min(q for q, _ in c)))
+        thap = min(q for q, _ in best) - 0.15 * atr
+        cao = max(q for q, _ in best) + 0.15 * atr
+        th.vung_ban = (lam_tron(thap, loai, xuong=False), lam_tron(cao, loai, xuong=False))
+        th.gia_ban = lam_tron(gia if gia >= thap else (thap + cao) / 2, loai, xuong=False)
+    elif th.hang >= 2:
+        th.gia_ban = gia
+    return th
+
+
 # ------------------------------------------------------------------------- tính lãi
 def tinh_lai(von: float, gia_mua: float, gia_ban: float, lo: int = 100,
              phi_mua: float = PHI_MUA, phi_ban: float = PHI_BAN, thue: float = THUE_BAN) -> dict:
@@ -242,10 +383,11 @@ def ke_hoach_von(kn: KhuyenNghi, von: float, lo: int = 100, **phi) -> dict:
 
 # ------------------------------------------------------------------------- danh mục
 def danh_gia_vi_the(gia_von: float, so_luong: float, kq: KetQua, kn: KhuyenNghi | None,
-                    phi_ban: float = PHI_BAN, thue: float = THUE_BAN) -> dict:
-    """Lãi/lỗ hiện tại của một vị thế và gợi ý Giữ / Chốt lời / Cắt lỗ."""
+                    phi_ban: float = PHI_BAN, thue: float = THUE_BAN, dinh: "TinHieuDinh | None" = None) -> dict:
+    """Lãi/lỗ hiện tại của một vị thế và gợi ý Giữ / Chốt lời / Bán ở đỉnh / Cắt lỗ."""
     if not kq.khung:
-        return {"gia": None, "lai": None, "pct": None, "goi_y": "Không có dữ liệu", "cat_lo": None}
+        return {"gia": None, "lai": None, "pct": None, "goi_y": "Không có dữ liệu", "cat_lo": None,
+                "gia_ban": None, "lai_neu_ban": None}
     gia = kq.khung[-1].gia
     tien_von = gia_von * so_luong * (1 + PHI_MUA)
     lai = gia * so_luong * (1 - phi_ban - thue) - tien_von
@@ -260,12 +402,19 @@ def danh_gia_vi_the(gia_von: float, so_luong: float, kq: KetQua, kn: KhuyenNghi 
         goi_y = "Cắt lỗ"
     elif cat_lo and gia < cat_lo:
         goi_y = "Bán – thủng hỗ trợ"
+    elif dinh and dinh.muc == "Bán mạnh":
+        goi_y = "Bán ở đỉnh"
     elif kq.xu_huong == -1:
         goi_y = "Chốt lời / hạ tỷ trọng" if pct > 0 else "Cân nhắc bán"
+    elif dinh and dinh.muc == "Chốt lời dần" and pct > 0:
+        goi_y = "Chốt lời một phần (tín hiệu đỉnh)"
     elif kn and kn.chot_loi1 and gia >= kn.chot_loi1 * 0.99 and pct > 0:
         goi_y = "Chốt lời một phần"
     elif kq.xu_huong == 1:
         goi_y = "Giữ"
     else:
         goi_y = "Theo dõi"
-    return {"gia": gia, "lai": lai, "pct": pct, "goi_y": goi_y, "cat_lo": cat_lo}
+    gia_ban = dinh.gia_ban if dinh and dinh.gia_ban else None
+    lai_neu_ban = (gia_ban * so_luong * (1 - phi_ban - thue) - tien_von) if gia_ban else None
+    return {"gia": gia, "lai": lai, "pct": pct, "goi_y": goi_y, "cat_lo": cat_lo,
+            "gia_ban": gia_ban, "lai_neu_ban": lai_neu_ban}

@@ -148,6 +148,16 @@ VCI_KHUNG = {"D": "ONE_DAY", "1H": "ONE_HOUR", "15m": "ONE_MINUTE"}
 SAN = {"HSX": "HOSE", "HNX": "HNX", "UPCOM": "UPCoM"}
 FILE_MA = Path(__file__).resolve().parent.parent / "du_lieu_ma" / "ma_vn.csv"
 
+# Ngành cấp 2 theo chuẩn ICB (mã icbCode2 của Vietcap)
+NGANH = {
+    "0500": "Dầu khí", "1300": "Hóa chất", "1700": "Tài nguyên cơ bản", "2300": "Xây dựng & Vật liệu",
+    "2700": "Hàng & Dịch vụ công nghiệp", "3300": "Ô tô & Phụ tùng", "3500": "Thực phẩm & Đồ uống",
+    "3700": "Hàng cá nhân & Gia dụng", "4500": "Y tế", "5300": "Bán lẻ", "5500": "Truyền thông",
+    "5700": "Du lịch & Giải trí", "6500": "Viễn thông", "7500": "Tiện ích (điện, nước, khí)",
+    "8300": "Ngân hàng", "8500": "Bảo hiểm", "8600": "Bất động sản", "8700": "Dịch vụ tài chính",
+    "9500": "Công nghệ thông tin",
+}
+
 
 def _vci_goi(duong_dan: str, body: dict | None = None, timeout: int = 30):
     req = urllib.request.Request(
@@ -180,14 +190,15 @@ def _vci(ma: str, khung: str = "D", so_nen: int = 1300) -> pd.DataFrame:
 
 
 def danh_sach_ma_vn(san=("HSX", "HNX", "UPCOM"), lam_moi: bool = False) -> pd.DataFrame:
-    """Toàn bộ cổ phiếu đang niêm yết: cột ma, san, ten. Lưu sẵn vào du_lieu_ma/ma_vn.csv
+    """Toàn bộ cổ phiếu đang niêm yết: cột ma, san, ten, nganh. Lưu sẵn vào du_lieu_ma/ma_vn.csv
     để vẫn dùng được khi mất mạng."""
     df = None
     if lam_moi or not FILE_MA.exists():
         try:
             raw = _vci_goi("price/symbols/getAll")
             df = pd.DataFrame([{"ma": x["symbol"], "san": x["board"],
-                                "ten": x.get("organShortName") or x.get("organName") or ""}
+                                "ten": x.get("organShortName") or x.get("organName") or "",
+                                "nganh": NGANH.get(str(x.get("icbCode2") or ""), "Khác")}
                                for x in raw if x.get("type") == "STOCK"
                                and x.get("board") in SAN and len(x.get("symbol", "")) == 3])
             df = df.sort_values(["san", "ma"]).reset_index(drop=True)
@@ -196,7 +207,9 @@ def danh_sach_ma_vn(san=("HSX", "HNX", "UPCOM"), lam_moi: bool = False) -> pd.Da
         except Exception:
             df = None
     if df is None:
-        df = pd.read_csv(FILE_MA, encoding="utf-8")
+        df = pd.read_csv(FILE_MA, encoding="utf-8", dtype=str)
+    if "nganh" not in df.columns:
+        df["nganh"] = "Khác"
     return df[df["san"].isin(san)].reset_index(drop=True)
 
 

@@ -63,15 +63,38 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
 - **Tầm giữ**:
   - Ngắn hạn: khung ngày, giữ 1–3 tháng, có xét thêm khung tuần.
   - Trung hạn: khung tuần, giữ 3–9 tháng, có xét thêm khung tháng.
+- **Tín hiệu bán ở đỉnh** (chốt lời/thoát hàng, vì cổ phiếu VN không bán khống được). Công cụ đếm các dấu hiệu:
+  - chạm Fibonacci mở rộng 1.272/1.618;
+  - Stoch/MFI quá mua;
+  - phân kỳ giảm MACD;
+  - quét thanh khoản đỉnh cũ;
+  - chạm Order Block/FVG giảm;
+  - CHoCH giảm;
+  - nến đảo chiều (râu trên dài, nhấn chìm giảm, mây đen);
+  - đã chạy từ 3 nhịp tăng.
+
+  Kết luận theo số dấu hiệu:
+  - từ 3 dấu hiệu: **Chốt lời dần**;
+  - từ 5 dấu hiệu, hoặc từ 3 dấu hiệu kèm CHoCH giảm: **Bán mạnh**;
+  - 2 dấu hiệu: **Theo dõi đỉnh**.
+
+  Kèm theo **vùng bán đẹp**: nơi hợp lưu kháng cự (Fibo mở rộng, đỉnh cũ, vùng cung).
+- **Phân ngành** (19 ngành ICB cấp 2): lọc theo ngành, bảng **sức mạnh ngành** (điểm TB, % mã tăng/giảm, hiệu suất 20 phiên).
+  Mã thuộc ngành Mạnh được +10 điểm khi xếp hạng mua, ngành Yếu bị −10 điểm và không được xếp "Mua mạnh".
 - **Tính lãi**: nhập số vốn → số cổ phiếu (lô 100), tiền và % lãi khi chạm chốt lời, tiền lỗ khi chạm cắt lỗ.
   Đã trừ phí mua 0,15%, phí bán 0,15% và thuế bán 0,1%.
 
 ## Web app trên điện thoại
 `web_app.py` là web app có 4 tab:
-- **Khuyến nghị**: bảng xếp hạng toàn thị trường. Có thể lọc theo sàn, mức khuyến nghị và thanh khoản, nhập số vốn để tính lãi/lỗ.
+- **Khuyến nghị**: gồm 3 chế độ xem:
+  - **Nên mua**: bảng xếp hạng mua, có thể nhập số vốn để tính lãi/lỗ;
+  - **Bán ở đỉnh**: các mã đang ở vùng đỉnh, kèm vùng bán đẹp;
+  - **Sức mạnh ngành**.
+
+  Có thể lọc theo sàn, ngành, mức tín hiệu và thanh khoản.
 - **Tra cứu**: gõ mã bất kỳ để xem khuyến nghị, vùng mua và máy tính lãi/lỗ, có biểu đồ vuốt và phóng to được.
-- **Danh mục**: nhập mã, giá mua và số lượng. App tính lãi/lỗ hiện tại (sau phí, thuế) và gợi ý Giữ / Chốt lời / Cắt lỗ,
-  kèm mức cắt lỗ động.
+- **Danh mục**: nhập mã, giá mua và số lượng. App tính lãi/lỗ hiện tại (sau phí, thuế) và gợi ý
+  Giữ / Chốt lời / **Bán ở đỉnh** / Cắt lỗ. Kèm theo giá bán đề xuất, tiền lãi nếu bán ở giá đó và mức cắt lỗ động.
 - **Theo dõi**: các mã trong `ma.txt`, tự làm mới mỗi giờ.
 
 Ở mục "⚙ Cài đặt chung" có thể chọn tầm giữ (ngắn hạn/trung hạn) và số vốn mỗi lệnh.

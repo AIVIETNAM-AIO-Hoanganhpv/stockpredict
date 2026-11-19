@@ -140,6 +140,21 @@ def the_khuyen_nghi(kn, von: float, lo: int = 100):
         st.caption("• " + dong)
 
 
+def the_tin_hieu_dinh(t, so_luong_dang_giu: float | None = None, gia_von: float | None = None):
+    """Thẻ tín hiệu bán ở đỉnh."""
+    mau = K.MAU_BAN.get(t.muc, "#64748b")
+    st.markdown(
+        f"<div style='padding:12px 16px;border-radius:12px;border:2px solid {mau};margin-top:8px'>"
+        f"<div style='font-size:13px;color:#64748b'>Tín hiệu bán ở đỉnh ({'khung ngày' if t.tam == 'D' else 'khung tuần'})"
+        f" · {t.so_dau_hieu} dấu hiệu</div>"
+        f"<div style='font-size:24px;font-weight:700;color:{mau}'>{t.muc}</div>"
+        + (f"<div style='font-size:15px'>Vùng bán đẹp: <b>{t.vung_ban[0]:,.0f} – {t.vung_ban[1]:,.0f}</b>"
+           f" · đặt bán {t.gia_ban:,.0f}</div>" if t.vung_ban and t.gia_ban else "") + "</div>",
+        unsafe_allow_html=True)
+    for d in t.dau_hieu:
+        st.caption("▼ " + d)
+
+
 @st.cache_resource
 def kho_thi_truong():
     """Kết quả quét dùng chung cho mọi người xem (lưu trong bộ nhớ máy chủ)."""
@@ -149,8 +164,8 @@ def kho_thi_truong():
 def doc_file_thi_truong(kho):
     if kho["D"] is None and FILE_TT.exists():
         data = json.loads(FILE_TT.read_text(encoding="utf-8"))
-        kho.update(luc=data["luc"] + " (bản lưu sẵn)", D=pd.DataFrame(data["D"]), W=pd.DataFrame(data["W"]),
-                   thong_ke=data["thong_ke"], ts=0.0)
+        kho.update(luc=data["luc"] + " (bản lưu sẵn)", thong_ke=data["thong_ke"], ts=0.0,
+                   **{k: pd.DataFrame(data.get(k, [])) for k in ("D", "W", "ban_D", "ban_W", "nganh_D", "nganh_W")})
 
 
 def quet_ngay(kho, san, gtgd_min):
@@ -159,7 +174,10 @@ def quet_ngay(kho, san, gtgd_min):
         thanh.progress(i / n, text=f"Đang quét {i}/{n} mã ({ma})")
     kq = quet.quet(san=tuple(san), gtgd_min=gtgd_min, tien_trinh=tt)
     kho.update(luc=pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%H:%M %d/%m/%Y"), ts=time.time(),
-               D=quet.bang(kq, "D"), W=quet.bang(kq, "W"), thong_ke=quet.thong_ke(kq))
+               thong_ke=quet.thong_ke(kq),
+               **{t: quet.bang(kq, t) for t in ("D", "W")},
+               **{f"ban_{t}": quet.bang_ban(kq, t) for t in ("D", "W")},
+               **{f"nganh_{t}": quet.suc_manh_nganh(kq, t) for t in ("D", "W")})
     thanh.empty()
 
 
@@ -197,7 +215,7 @@ with tab0:
                          format_func=lambda x: du_lieu.SAN[x])
     gtgd_ty = c2.number_input("GTGD tối thiểu (tỷ đồng/phiên)", min_value=0.0, value=1.0, step=0.5)
     cu = time.time() - kho["ts"] > 3600
-    if st.button("🔄 Quét toàn thị trường" + (" (~3–5 phút)" if cu else ""), type="primary", width="stretch"):
+    if st.button("🔄 Quét toàn thị trường" + (" (~3–7 phút)" if cu else ""), type="primary", width="stretch"):
         quet_ngay(kho, san or ["HSX"], gtgd_ty * 1e9)
     if kho[tam] is None:
         st.info("Chưa có dữ liệu – bấm **Quét toàn thị trường**.")
@@ -205,32 +223,79 @@ with tab0:
         tk = kho["thong_ke"]
         st.caption(f"Cập nhật {kho['luc']} · quét {tk['tong']} mã · phân tích {tk['phan_tich']} mã đủ thanh khoản "
                    f"· {tk['tang']} tăng / {tk['giam']} giảm")
-        b = tinh_lai_bang(kho[tam], von)
-        b = b[b["Sàn"].isin([du_lieu.SAN[x] for x in san])] if san else b
-        b = b[b["GTGD (tỷ)"].fillna(0) >= gtgd_ty]
-        muc = st.multiselect("Lọc khuyến nghị", K.MUC[::-1], default=["Mua mạnh", "Mua", "Chờ về vùng mua"])
-        b = b[b["Khuyến nghị"].isin(muc)]
-        dem = b["Khuyến nghị"].value_counts()
-        cols = st.columns(3)
-        for col, m in zip(cols, ["Mua mạnh", "Mua", "Chờ về vùng mua"]):
-            col.metric(m, int(dem.get(m, 0)))
-        hien = b[["Mã", "Sàn", "Khuyến nghị", "Giá", "Vùng mua", "Giá mua", "Cắt lỗ", "Chốt lời", "R:R",
-                  "% lãi", "Tiền lãi", "Tiền lỗ", "Số CP", "GTGD (tỷ)"]]
-        def mau_muc(v):
-            return f"color:{K.MAU_MUC.get(v, '#000')};font-weight:600"
-        st.dataframe(hien.style.map(mau_muc, subset=["Khuyến nghị"]).format(
-            {"Giá": "{:,.0f}", "Giá mua": "{:,.0f}", "Cắt lỗ": "{:,.0f}", "Chốt lời": "{:,.0f}",
-             "Tiền lãi": "{:,.0f}", "Tiền lỗ": "{:,.0f}", "Số CP": "{:,.0f}", "R:R": "{:.1f}",
-             "% lãi": "{:+.1f}%", "GTGD (tỷ)": "{:,.1f}"}, na_rep="–"),
-            hide_index=True, width="stretch", height=420)
-        st.download_button("⬇ Tải bảng Excel/CSV", hien.to_csv(index=False).encode("utf-8-sig"),
-                           file_name=f"khuyen_nghi_{tam}.csv", mime="text/csv", width="stretch")
-        if not b.empty:
-            chon = st.selectbox("Xem chi tiết mã", b["Mã"].tolist(), key="chon_kn")
+        xem = st.radio("Xem", ["🟢 Nên mua", "🔴 Bán ở đỉnh", "🏭 Sức mạnh ngành"], horizontal=True,
+                       label_visibility="collapsed", key="xem")
+        ng = kho.get(f"nganh_{tam}")
+        ds_nganh = ng["Ngành"].tolist() if ng is not None and not ng.empty else []
+        loc_nganh = st.multiselect("Ngành", ds_nganh, placeholder="Tất cả ngành", key="loc_nganh") if xem != "🏭 Sức mạnh ngành" else []
+
+        def loc(b):
+            if b is None or b.empty:
+                return pd.DataFrame()
+            b = b[b["Sàn"].isin([du_lieu.SAN[x] for x in san])] if san else b
+            b = b[b["GTGD (tỷ)"].fillna(0) >= gtgd_ty]
+            if loc_nganh and "Ngành" in b:
+                b = b[b["Ngành"].isin(loc_nganh)]
+            return b
+
+        chon = None
+        if xem == "🟢 Nên mua":
+            b = loc(tinh_lai_bang(kho[tam], von))
+            muc = st.multiselect("Lọc khuyến nghị", K.MUC[::-1], default=["Mua mạnh", "Mua", "Chờ về vùng mua"])
+            b = b[b["Khuyến nghị"].isin(muc)] if not b.empty else b
+            dem = b["Khuyến nghị"].value_counts() if not b.empty else {}
+            for col, m in zip(st.columns(3), ["Mua mạnh", "Mua", "Chờ về vùng mua"]):
+                col.metric(m, int(dem.get(m, 0)))
+            if not b.empty:
+                cot = [c for c in ["Mã", "Ngành", "Khuyến nghị", "Giá", "Vùng mua", "Giá mua", "Cắt lỗ", "Chốt lời",
+                                   "R:R", "% lãi", "Tiền lãi", "Tiền lỗ", "Số CP", "Ngành mạnh/yếu", "Tín hiệu đỉnh",
+                                   "GTGD (tỷ)"] if c in b]
+                hien = b[cot]
+                st.dataframe(hien.style.map(lambda v: f"color:{K.MAU_MUC.get(v, '#000')};font-weight:600",
+                                            subset=["Khuyến nghị"]).format(
+                    {"Giá": "{:,.0f}", "Giá mua": "{:,.0f}", "Cắt lỗ": "{:,.0f}", "Chốt lời": "{:,.0f}",
+                     "Tiền lãi": "{:,.0f}", "Tiền lỗ": "{:,.0f}", "Số CP": "{:,.0f}", "R:R": "{:.1f}",
+                     "% lãi": "{:+.1f}%", "GTGD (tỷ)": "{:,.1f}"}, na_rep="–"),
+                    hide_index=True, width="stretch", height=420)
+                st.download_button("⬇ Tải bảng (CSV)", hien.to_csv(index=False).encode("utf-8-sig"),
+                                   file_name=f"nen_mua_{tam}.csv", mime="text/csv", width="stretch")
+                chon = st.selectbox("Xem chi tiết mã", b["Mã"].tolist(), key="chon_kn")
+        elif xem == "🔴 Bán ở đỉnh":
+            b = loc(kho.get(f"ban_{tam}"))
+            muc = st.multiselect("Lọc tín hiệu", K.MUC_BAN[:0:-1], default=["Bán mạnh", "Chốt lời dần", "Theo dõi đỉnh"])
+            b = b[b["Tín hiệu"].isin(muc)] if not b.empty else b
+            dem = b["Tín hiệu"].value_counts() if not b.empty else {}
+            for col, m in zip(st.columns(3), ["Bán mạnh", "Chốt lời dần", "Theo dõi đỉnh"]):
+                col.metric(m, int(dem.get(m, 0)))
+            st.caption("Cổ phiếu VN không bán khống được: đây là gợi ý CHỐT LỜI / thoát hàng cho mã đang nắm giữ.")
+            if b.empty:
+                st.info("Hiện chưa có mã nào ở vùng đỉnh theo bộ lọc này.")
+            else:
+                hien = b[["Mã", "Ngành", "Tín hiệu", "Số dấu hiệu", "Giá", "% 20 phiên", "Vùng bán", "Giá bán",
+                          "Đỉnh gần nhất", "GTGD (tỷ)", "Dấu hiệu"]]
+                st.dataframe(hien.style.map(lambda v: f"color:{K.MAU_BAN.get(v, '#000')};font-weight:600",
+                                            subset=["Tín hiệu"]).format(
+                    {"Giá": "{:,.0f}", "Giá bán": "{:,.0f}", "Đỉnh gần nhất": "{:,.0f}", "% 20 phiên": "{:+.1f}%",
+                     "GTGD (tỷ)": "{:,.1f}"}, na_rep="–"), hide_index=True, width="stretch", height=420)
+                st.download_button("⬇ Tải bảng (CSV)", hien.to_csv(index=False).encode("utf-8-sig"),
+                                   file_name=f"ban_dinh_{tam}.csv", mime="text/csv", width="stretch")
+                chon = st.selectbox("Xem chi tiết mã", b["Mã"].tolist(), key="chon_ban")
+        else:
+            if ng is None or ng.empty:
+                st.info("Bấm **Quét toàn thị trường** để xếp hạng ngành.")
+            else:
+                st.caption("Sức mạnh = điểm xu hướng TB, tỷ lệ mã tăng/giảm và hiệu suất 20 phiên. "
+                           "Mã thuộc ngành Mạnh được cộng 10 điểm khi xếp hạng mua, ngành Yếu bị trừ 10.")
+                mau_xl = {"Mạnh": "color:#16a34a;font-weight:600", "Yếu": "color:#dc2626;font-weight:600"}
+                st.dataframe(ng.style.map(lambda v: mau_xl.get(v, ""), subset=["Xếp loại"]).format(
+                    {"Điểm TB": "{:+.1f}", "Hiệu suất 20 phiên %": "{:+.1f}%", "Sức mạnh": "{:+.1f}",
+                     "GTGD (tỷ)": "{:,.0f}"}), hide_index=True, width="stretch", height=560)
+        if chon:
             with st.spinner(f"Đang phân tích {chon}…"):
                 kq, _, _ = phan_tich(chon, False)
             if kq.khung:
                 the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
+                the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
                 chi_tiet(kq, None, "khuyen_nghi")
 
 with tab1:
@@ -246,8 +311,12 @@ with tab1:
             kq, _, tl = phan_tich(ma, thu_lai)
         if kq.khung and kq.loai == "vn" and tam in kq.frames:
             the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
+            the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
         elif kq.khung:
             st.caption("Khuyến nghị mua & máy tính lãi/lỗ áp dụng cho cổ phiếu Việt Nam.")
+            khung_dinh = "4H" if kq.loai == "fx" else "D"
+            if khung_dinh in kq.frames:
+                the_tin_hieu_dinh(K.tin_hieu_dinh(kq, khung_dinh, loai=kq.loai))
         chi_tiet(kq, tl, "tra_cuu")
 
 with tab2:
@@ -278,14 +347,16 @@ with tab2:
             continue
         kq, _, _ = phan_tich(m, False)
         kn = K.khuyen_nghi(kq, tam) if kq.khung and tam in kq.frames else None
-        v = K.danh_gia_vi_the(float(r["Giá mua"]), float(r["Số lượng"]), kq, kn)
+        dinh = K.tin_hieu_dinh(kq, tam) if kq.khung and tam in kq.frames else None
+        v = K.danh_gia_vi_the(float(r["Giá mua"]), float(r["Số lượng"]), kq, kn, dinh=dinh)
         if v["lai"] is not None:
             tong_von += float(r["Giá mua"]) * float(r["Số lượng"])
             tong_lai += v["lai"]
         rows.append({"Mã": m, "Giá mua": r["Giá mua"], "Giá hiện tại": v["gia"], "Số lượng": r["Số lượng"],
                      "Lãi/lỗ": v["lai"], "%": v["pct"] * 100 if v["pct"] is not None else None,
-                     "Gợi ý": v["goi_y"], "Cắt lỗ động": v["cat_lo"],
-                     "Chốt lời": kn.chot_loi1 if kn else None})
+                     "Gợi ý": v["goi_y"], "Tín hiệu đỉnh": dinh.muc if dinh else "–",
+                     "Giá bán đề xuất": v["gia_ban"], "Lãi nếu bán": v["lai_neu_ban"],
+                     "Cắt lỗ động": v["cat_lo"], "Chốt lời": kn.chot_loi1 if kn else None})
     if rows:
         c1, c2 = st.columns(2)
         c1.metric("Tổng vốn", tien(tong_von))
@@ -294,7 +365,8 @@ with tab2:
             return "" if v is None or pd.isna(v) else ("color:#16a34a" if v > 0 else "color:#dc2626")
         st.dataframe(pd.DataFrame(rows).style.map(mau_lai, subset=["Lãi/lỗ", "%"]).format(
             {"Giá mua": "{:,.0f}", "Giá hiện tại": "{:,.0f}", "Số lượng": "{:,.0f}", "Lãi/lỗ": "{:,.0f}",
-             "%": "{:+.1f}%", "Cắt lỗ động": "{:,.0f}", "Chốt lời": "{:,.0f}"}, na_rep="–"),
+             "%": "{:+.1f}%", "Cắt lỗ động": "{:,.0f}", "Chốt lời": "{:,.0f}", "Giá bán đề xuất": "{:,.0f}",
+             "Lãi nếu bán": "{:,.0f}"}, na_rep="–"),
             hide_index=True, width="stretch")
 
 with tab3:

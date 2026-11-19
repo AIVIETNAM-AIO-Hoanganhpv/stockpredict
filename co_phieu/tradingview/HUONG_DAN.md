@@ -23,6 +23,24 @@ Ngoài ra nó kết hợp thêm khung thời gian lớn hơn, rồi tự vào l�
   Khung lớn được tự chọn: 15m→1H, 1H→4H, 4H→D, D→W, W→M. Khung lớn chỉ dùng nến **đã đóng**, nên
   kết quả backtest không bị "nhìn trước tương lai".
 
+## Tín hiệu bán ở đỉnh
+Script đếm 9 dấu hiệu đỉnh:
+- chạm Fibonacci mở rộng 1.272;
+- Stoch quá mua;
+- MFI quá mua;
+- phân kỳ giảm MACD;
+- quét thanh khoản đỉnh cũ;
+- chạm FVG giảm (vùng cung);
+- CHoCH giảm;
+- nến đảo chiều (râu trên dài hoặc nhấn chìm giảm);
+- đã chạy từ 3 nhịp tăng.
+
+Khi có **từ 3 dấu hiệu** và giá đang ở gần vùng đỉnh, biểu đồ hiện nhãn **ĐỈNH** màu nâu đỏ. Khi đó:
+- lệnh Mua đang mở sẽ được đóng (chốt lời);
+- nếu "Chiều lệnh" cho phép Bán, script mở thêm lệnh Bán (hợp với forex/vàng; cổ phiếu VN nên chọn **Chỉ Mua**).
+
+Bảng điểm có thêm dòng "Tín hiệu đỉnh". Bạn đổi số dấu hiệu tối thiểu trong nhóm cài đặt "Tín hiệu bán ở đỉnh".
+
 ## Các cài đặt (nút ⚙ cạnh tên strategy)
 | Cài đặt | Mặc định | Ghi chú |
 |---|---|---|

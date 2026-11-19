@@ -57,7 +57,8 @@ def test_ma_loi_khong_lam_hong_app(gia_gia):
 
 
 def test_quet_thi_truong_tren_web(gia_gia, monkeypatch):
-    ds = pd.DataFrame({"ma": ["AAA", "BBB"], "san": ["HSX", "HNX"], "ten": ["A", "B"]})
+    ds = pd.DataFrame({"ma": ["AAA", "BBB"], "san": ["HSX", "HNX"], "ten": ["A", "B"],
+                       "nganh": ["Ngân hàng", "Bất động sản"]})
     monkeypatch.setattr(du_lieu, "danh_sach_ma_vn", lambda san=None, lam_moi=False: ds[ds.san.isin(san)])
 
     def fake_vci(ma, khung="D", so_nen=1300):
@@ -69,3 +70,7 @@ def test_quet_thi_truong_tren_web(gia_gia, monkeypatch):
     nut(at, "Quét toàn thị trường").click().run()
     assert not at.exception, at.exception
     assert any("quét 2 mã" in c.value for c in at.caption)
+    for che_do in ("🔴 Bán ở đỉnh", "🏭 Sức mạnh ngành"):
+        at.radio(key="xem").set_value(che_do).run()
+        assert not at.exception, (che_do, at.exception)
+    assert any("Ngân hàng" in str(df.value) for df in at.dataframe)
