@@ -38,7 +38,7 @@ def test_tra_cuu_va_danh_sach(gia_gia):
     assert not at.exception, at.exception
     md = " ".join(m.value for m in at.markdown)
     assert "FPT" in md and ("Tăng" in md or "Giảm" in md or "Đi ngang" in md)
-    assert len(at.tabs) == 4
+    assert {"🏆 Khuyến nghị", "🔎 Bộ lọc", "🔍 Tra cứu", "💼 Danh mục", "📋 Theo dõi"} <= {t.label for t in at.tabs}
     assert len(at.dataframe) >= 2                       # danh mục + danh sách theo dõi
 
     at.text_input[0].set_value("EURUSD")
@@ -82,3 +82,36 @@ def test_tra_cuu_ma_trung_danh_sach_theo_doi(gia_gia):
     at.text_input[0].set_value("VNINDEX")
     nut(at, "Phân tích").click().run()
     assert not at.exception, at.exception
+
+
+def test_tra_cuu_doanh_nghiep_fpt(gia_gia):
+    """FPT có dữ liệu doanh nghiệp mẫu → hiện 4 mục Kỹ thuật / Doanh nghiệp / Tài chính / Chỉ số."""
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
+    assert not at.exception, at.exception
+    nhan = [t.label for t in at.tabs]
+    assert {"🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số", "🔎 Bộ lọc"} <= set(nhan)
+    md = " ".join(m.value for m in at.markdown)
+    assert "Công ty Cổ phần FPT" in md and "Sức khỏe tài chính" in md
+    assert any("CTCK" in i.value for i in at.info)
+    # đổi sang báo cáo quý, cân đối kế toán
+    at.radio(key="bctc_ky_FPT").set_value("Quý").run()
+    at.selectbox(key="bctc_phan_FPT").set_value("cdkt").run()
+    assert not at.exception, at.exception
+
+
+def test_bo_loc_sau_khi_quet(gia_gia, monkeypatch):
+    ds = pd.DataFrame({"ma": ["AAA", "FPT"], "san": ["HSX", "HSX"], "ten": ["A", "FPT"],
+                       "nganh": ["Ngân hàng", "Công nghệ thông tin"]})
+    monkeypatch.setattr(du_lieu, "danh_sach_ma_vn", lambda san=None, lam_moi=False: ds[ds.san.isin(san)])
+
+    def fake_vci(ma, khung="D", so_nen=1300):
+        df = gia_gia_lap(1.0, n=900)
+        df.index = pd.date_range(end=pd.Timestamp.now().normalize(), periods=len(df))
+        return df * [250, 250, 250, 250, 1e4]
+    monkeypatch.setattr(du_lieu, "_vci", fake_vci)
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
+    nut(at, "Quét toàn thị trường").click().run()
+    assert not at.exception, at.exception
+    at.slider[0].set_value(1.0).run()
+    assert not at.exception, at.exception
+    assert any(m.label == "Số mã đạt" for m in at.metric)

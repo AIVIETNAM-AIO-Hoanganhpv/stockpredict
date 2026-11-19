@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import du_lieu, khuyen_nghi as K, phan_tich
+from . import co_ban, du_lieu, khuyen_nghi as K, phan_tich
 
 
 @dataclass
@@ -25,6 +25,7 @@ class KetQuaMa:
     nganh: str = "Khác"
     hieu_suat_20: float = 0.0   # % thay đổi 20 phiên
     dinh: dict = None           # {"D": TinHieuDinh, "W": TinHieuDinh}
+    co_ban: dict = None         # số liệu cơ bản (P/E, ROE, sức khỏe…) – xem co_ban.tom_tat_co_ban
 
 
 def phan_tich_df(ma: str, df: pd.DataFrame, loai: str = "vn", san: str | None = None):
@@ -37,7 +38,7 @@ def phan_tich_df(ma: str, df: pd.DataFrame, loai: str = "vn", san: str | None = 
     return kq, {tam: K.khuyen_nghi(kq, tam, loai, san) for tam in ("D", "W")}
 
 
-def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác"):
+def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác", lay_co_ban=True):
     r = KetQuaMa(ma, san, ten, nganh=nganh or "Khác")
     try:
         df = du_lieu._vci(ma, "D")
@@ -54,13 +55,20 @@ def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác"):
             r.dinh = {tam: K.tin_hieu_dinh(r.kq, tam, san=san) for tam in ("D", "W")}
             if len(df) > 21:
                 r.hieu_suat_20 = float(df["close"].iloc[-1] / df["close"].iloc[-21] - 1)
+            if lay_co_ban:
+                try:
+                    r.co_ban = co_ban.tom_tat_co_ban(ma, df)
+                    for kn in r.kn.values():
+                        co_ban.dieu_chinh_khuyen_nghi(kn, r.co_ban)
+                except Exception:
+                    r.co_ban = None
     except Exception as e:
         r.loi = str(e)[:120]
     return r
 
 
 def quet(san=("HSX", "HNX", "UPCOM"), gtgd_min: float = 1e9, so_luong: int = 6,
-         ds_ma: list | None = None, tien_trinh=None) -> list[KetQuaMa]:
+         ds_ma: list | None = None, tien_trinh=None, lay_co_ban: bool = True) -> list[KetQuaMa]:
     """Tải & phân tích mọi mã. `gtgd_min`: bỏ qua mã có GTGD bình quân 20 phiên thấp hơn (đồng).
     `tien_trinh(i, n, ma)`: hàm báo tiến độ (thanh tiến trình trên web)."""
     dsm = du_lieu.danh_sach_ma_vn(san)
@@ -69,7 +77,8 @@ def quet(san=("HSX", "HNX", "UPCOM"), gtgd_min: float = 1e9, so_luong: int = 6,
     viec = list(dsm.itertuples(index=False))
     out = []
     with ThreadPoolExecutor(max_workers=so_luong) as ex:
-        futs = [ex.submit(_mot_ma, x.ma, x.san, x.ten, gtgd_min, getattr(x, "nganh", "Khác")) for x in viec]
+        futs = [ex.submit(_mot_ma, x.ma, x.san, x.ten, gtgd_min, getattr(x, "nganh", "Khác"), lay_co_ban)
+                for x in viec]
         for i, f in enumerate(as_completed(futs), 1):
             r = f.result()
             out.append(r)
@@ -94,6 +103,11 @@ def suc_manh_nganh(ket_qua: list[KetQuaMa], tam: str = "D") -> pd.DataFrame:
         g["mua"] += r.kn[tam].hang >= 3
         g["ban"] += bool(r.dinh) and r.dinh[tam].hang >= 2
         g["gtgd"] += r.gtgd
+        cb = r.co_ban or {}
+        if cb.get("P/E") and cb["P/E"] > 0:
+            g.setdefault("pe", []).append(cb["P/E"])
+        if cb.get("Sức khỏe") is not None:
+            g.setdefault("sk", []).append(cb["Sức khỏe"])
     out = []
     for ten, g in rows.items():
         n = len(g["diem"])
@@ -103,6 +117,8 @@ def suc_manh_nganh(ket_qua: list[KetQuaMa], tam: str = "D") -> pd.DataFrame:
         out.append({"Ngành": ten, "Số mã": n, "% mã tăng": round(pt * 100), "% mã giảm": round(pg * 100),
                     "Điểm TB": round(diem_tb, 1), "Hiệu suất 20 phiên %": round(hs * 100, 1),
                     "Số mã Mua": g["mua"], "Số mã Bán": g["ban"], "GTGD (tỷ)": round(g["gtgd"] / 1e9),
+                    "P/E trung vị": round(float(pd.Series(g["pe"]).median()), 1) if g.get("pe") else None,
+                    "Sức khỏe TB": round(float(pd.Series(g["sk"]).mean()), 1) if g.get("sk") else None,
                     "Sức mạnh": round(0.5 * diem_tb + 30 * (pt - pg) + 100 * hs, 1)})
     df = pd.DataFrame(out)
     if df.empty:
@@ -166,6 +182,7 @@ def bang(ket_qua: list[KetQuaMa], tam: str = "D", von: float = 100e6) -> pd.Data
             "Số CP": lai["tp1"]["so_cp"] if lai.get("tp1") else None,
             "Cách vùng mua %": _so(kn.cach_vung_pct * 100, 1) if kn.cach_vung_pct is not None else None,
             "GTGD (tỷ)": _so(r.gtgd / 1e9, 1),
+            **(r.co_ban or {}),
             "Lý do": " · ".join(kn.ly_do),
         })
     df = pd.DataFrame(rows)
@@ -173,7 +190,8 @@ def bang(ket_qua: list[KetQuaMa], tam: str = "D", von: float = 100e6) -> pd.Data
         return df
     df["_rr"] = df["R:R"].fillna(0)
     df["_ng"] = df["Ngành mạnh/yếu"].map({"Mạnh": 1, "Yếu": -1}).fillna(0)
-    df = df.sort_values(["Hạng", "_ng", "_rr", "Điểm"], ascending=False).drop(columns=["_rr", "_ng"])
+    df["_sk"] = df["Sức khỏe"].fillna(3) if "Sức khỏe" in df else 3
+    df = df.sort_values(["Hạng", "_ng", "_sk", "_rr", "Điểm"], ascending=False).drop(columns=["_rr", "_ng", "_sk"])
     return df.reset_index(drop=True)
 
 
@@ -192,6 +210,7 @@ def bang_ban(ket_qua: list[KetQuaMa], tam: str = "D") -> pd.DataFrame:
             "% phiên": _so(r.thay_doi * 100, 1), "% 20 phiên": _so(r.hieu_suat_20 * 100, 1),
             "Vùng bán": f"{t.vung_ban[0]:,.0f} – {t.vung_ban[1]:,.0f}" if t.vung_ban else "",
             "Giá bán": t.gia_ban, "Đỉnh gần nhất": t.gia_dinh, "GTGD (tỷ)": _so(r.gtgd / 1e9, 1),
+            "P/E": (r.co_ban or {}).get("P/E"), "Sức khỏe": (r.co_ban or {}).get("Sức khỏe"),
             "Dấu hiệu": " · ".join(t.dau_hieu),
         })
     df = pd.DataFrame(rows)

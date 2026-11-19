@@ -14,7 +14,7 @@ import streamlit as st
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, du_lieu, khuyen_nghi as K, quet  # noqa: E402
+from dudoan import bao_cao, co_ban as CB, du_lieu, khuyen_nghi as K, quet  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -195,6 +195,145 @@ def tinh_lai_bang(b: pd.DataFrame, von: float) -> pd.DataFrame:
     return b
 
 
+# ------------------------------------------------------------------------------------------ doanh nghiệp
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cb_ho_so(ma):
+    return CB.ho_so(ma), CB.co_dong(ma, 10)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cb_bctc(ma, phan, quy):
+    return CB.bang_bctc(ma, phan, quy)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cb_chi_so(ma, quy):
+    return CB.bang_chi_so(ma, quy), CB.chi_so_moi_nhat(ma)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cb_suc_khoe(ma):
+    sk = CB.suc_khoe_hien_tai(ma)
+    return sk, CB._chuoi_quy(ma)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cb_excel(ma):
+    import tempfile
+    p = Path(tempfile.mkdtemp()) / f"{ma}_tai_chinh.xlsx"
+    CB.xuat_excel(ma, p)
+    return p.read_bytes()
+
+
+def sao(x):
+    if x is None:
+        return "–"
+    n = int(round(x))
+    return "★" * n + "☆" * (5 - n)
+
+
+def ty(x):
+    return "–" if x is None or pd.isna(x) else f"{x / 1e9:,.0f} tỷ"
+
+
+def muc_doanh_nghiep(ma):
+    hs, cd = cb_ho_so(ma)
+    if not hs:
+        st.info("Không có thông tin doanh nghiệp cho mã này.")
+        return
+    st.markdown(f"#### {hs['ten']}")
+    st.caption(f"{hs['nganh']} · niêm yết {hs['ngay_niem_yet']}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Vốn hóa", f"{hs['von_hoa'] / 1e12:,.1f} nghìn tỷ" if hs.get("von_hoa") else "–")
+    c2.metric("Số cổ phiếu", f"{hs['so_cp'] / 1e6:,.0f} triệu" if hs.get("so_cp") else "–")
+    c3.metric("GTGD TB 1 tháng", ty(hs.get("gtgd_tb_1t")))
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Cao/Thấp 52 tuần", f"{_f(hs.get('cao_52t'))} / {_f(hs.get('thap_52t'))}")
+    c2.metric("Nước ngoài sở hữu", f"{hs['nuoc_ngoai']:.1%}" if hs.get("nuoc_ngoai") is not None else "–",
+              f"room {hs['room_nuoc_ngoai']:.0%}" if hs.get("room_nuoc_ngoai") else None, delta_color="off")
+    c3.metric("Nhà nước sở hữu", f"{hs['nha_nuoc']:.1%}" if hs.get("nha_nuoc") is not None else "–")
+    ck = hs.get("ctck")
+    if ck:
+        st.info(f"**Khuyến nghị của CTCK ({ck['nguon']})**: {ck['xep_hang']} · giá mục tiêu {_f(ck['gia_muc_tieu'])}"
+                + (f" (tiềm năng {ck['tiem_nang']:+.0%})" if ck.get("tiem_nang") is not None else "")
+                + f" · ngày {ck['ngay']}" + (f" · chuyên viên {ck['chuyen_vien']}" if ck.get("chuyen_vien") else "")
+                + ". Đây là ý kiến của bên thứ ba, không phải của công cụ này.")
+    if hs.get("gioi_thieu"):
+        with st.expander("Giới thiệu doanh nghiệp"):
+            st.write(hs["gioi_thieu"])
+    if not cd.empty:
+        st.markdown("##### Cổ đông lớn & ban lãnh đạo")
+        st.dataframe(cd.style.format({"Số CP": "{:,.0f}", "Tỷ lệ %": "{:.2f}%"}), hide_index=True, width="stretch")
+
+
+def muc_tai_chinh(ma):
+    try:
+        sk, quy = cb_suc_khoe(ma)
+    except Exception as e:
+        st.info(f"Không có báo cáo tài chính: {e}")
+        return
+    if not quy.empty:
+        import plotly.graph_objects as go
+        q = quy.tail(8)
+        fig = go.Figure()
+        fig.add_bar(x=q["ky"], y=q["dt"] / 1e9, name="Doanh thu (tỷ)", marker_color="#93c5fd")
+        fig.add_bar(x=q["ky"], y=q["ln"] / 1e9, name="Lợi nhuận (tỷ)", marker_color="#2563eb")
+        fig.update_layout(barmode="group", height=300, margin=dict(l=8, r=8, t=30, b=8), template="plotly_white",
+                          title="Doanh thu & lợi nhuận theo quý", legend=dict(orientation="h", y=-0.2))
+        st.plotly_chart(fig, width="stretch", key=f"bctc_bd_{ma}")
+    c1, c2 = st.columns(2)
+    phan = c1.selectbox("Báo cáo", list(CB.TEN_PHAN), format_func=CB.TEN_PHAN.get, key=f"bctc_phan_{ma}")
+    ky = c2.radio("Kỳ", ["Năm", "Quý"], horizontal=True, key=f"bctc_ky_{ma}")
+    b = cb_bctc(ma, phan, ky == "Quý")
+    if b.empty:
+        st.info("Không có dữ liệu.")
+    else:
+        st.caption("Đơn vị: tỷ đồng (EPS: đồng)")
+        st.dataframe(b.drop(columns="_ma").set_index("Chỉ tiêu").style.format("{:,.1f}", na_rep="–"),
+                     width="stretch", height=480)
+    st.download_button("⬇ Tải BCTC & chỉ số (Excel)", cb_excel(ma), file_name=f"{ma}_tai_chinh.xlsx",
+                       width="stretch", key=f"bctc_xlsx_{ma}")
+
+
+def muc_chi_so(ma):
+    try:
+        sk, _ = cb_suc_khoe(ma)
+        bang_q, moi = cb_chi_so(ma, True)
+    except Exception as e:
+        st.info(f"Không có chỉ số tài chính: {e}")
+        return
+    if sk.du_lieu:
+        st.markdown(f"#### Sức khỏe tài chính: {sk.tong}/5")
+        c1, c2 = st.columns(2)
+        c1.markdown(f"Tăng trưởng **{sao(sk.tang_truong)}**  \nSinh lời **{sao(sk.sinh_loi)}**")
+        c2.markdown(f"An toàn tài chính **{sao(sk.an_toan)}**  \nĐịnh giá **{sao(sk.dinh_gia)}**")
+        for d in sk.ly_do:
+            st.caption("• " + d)
+        with st.expander("Cách chấm sao"):
+            st.markdown(
+                "- **Tăng trưởng**: lợi nhuận & doanh thu 4 quý gần nhất so với 4 quý trước (giảm >20% → 1★, "
+                "tăng >25% → 5★).\n- **Sinh lời**: ROE (<5% → 1★, ≥20% → 5★; đang lỗ → 1★).\n"
+                "- **An toàn**: nợ vay/vốn chủ (>2 lần → 1★, ≤0,5 → 5★); ngân hàng: vốn chủ/tổng tài sản.\n"
+                "- **Định giá**: P/E hiện tại so với P/E của chính mã đó 3 năm qua (rẻ nhất 20% → 5★).\n"
+                "Chỉ dùng báo cáo đã công bố. Điểm tổng = trung bình 4 mục.")
+    else:
+        st.caption(" · ".join(sk.ly_do))
+    if moi:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("P/E", f"{moi['pe']:.1f}" if moi.get("pe") else "–")
+        c2.metric("P/B", f"{moi['pb']:.2f}" if moi.get("pb") else "–")
+        c3.metric("ROE", f"{moi['roe']:.1%}" if moi.get("roe") else "–")
+        c4.metric("Cổ tức", f"{moi['dividendYield']:.1%}" if moi.get("dividendYield") else "–")
+        if moi.get("pe_lich_su") and moi.get("pe"):
+            ls = moi["pe_lich_su"]
+            st.caption(f"P/E 5 năm: thấp nhất {min(ls):.1f} · trung vị {pd.Series(ls).median():.1f} · cao nhất {max(ls):.1f}")
+    ky = st.radio("Kỳ", ["Quý (4 quý gần nhất)", "Năm"], horizontal=True, key=f"cs_ky_{ma}")
+    b = bang_q if ky.startswith("Quý") else cb_chi_so(ma, False)[0]
+    if not b.empty:
+        st.caption("Đơn vị: % với ROE, ROA, biên LN, cổ tức, NIM, NPL, CASA; lần (x) với P/E, P/B, nợ.")
+        st.dataframe(b.set_index("Chỉ số").style.format("{:,.2f}", na_rep="–"), width="stretch")
+
+
 # ------------------------------------------------------------------------------------------ giao diện
 st.markdown("### 📈 Dự đoán xu hướng & khuyến nghị")
 st.caption("Stoch · MACD · MFI · ADX · ICT · SMC · Fibonacci · LEVEL 1")
@@ -205,7 +344,8 @@ with st.expander("⚙ Cài đặt chung", expanded=False):
                           step=10_000_000, format="%d")
 tam = TAM[tam_nhan]
 
-tab0, tab1, tab2, tab3 = st.tabs(["🏆 Khuyến nghị", "🔍 Tra cứu", "💼 Danh mục", "📋 Theo dõi"])
+tab0, tab_loc, tab1, tab2, tab3 = st.tabs(["🏆 Khuyến nghị", "🔎 Bộ lọc", "🔍 Tra cứu", "💼 Danh mục",
+                                           "📋 Theo dõi"])
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
 
 with tab0:
@@ -249,14 +389,15 @@ with tab0:
                 col.metric(m, int(dem.get(m, 0)))
             if not b.empty:
                 cot = [c for c in ["Mã", "Ngành", "Khuyến nghị", "Giá", "Vùng mua", "Giá mua", "Cắt lỗ", "Chốt lời",
-                                   "R:R", "% lãi", "Tiền lãi", "Tiền lỗ", "Số CP", "Ngành mạnh/yếu", "Tín hiệu đỉnh",
-                                   "GTGD (tỷ)"] if c in b]
+                                   "R:R", "% lãi", "Tiền lãi", "Tiền lỗ", "Số CP", "Sức khỏe", "P/E", "ROE %",
+                                   "Tăng LN %", "CTCK", "Ngành mạnh/yếu", "Tín hiệu đỉnh", "GTGD (tỷ)"] if c in b]
                 hien = b[cot]
                 st.dataframe(hien.style.map(lambda v: f"color:{K.MAU_MUC.get(v, '#000')};font-weight:600",
                                             subset=["Khuyến nghị"]).format(
                     {"Giá": "{:,.0f}", "Giá mua": "{:,.0f}", "Cắt lỗ": "{:,.0f}", "Chốt lời": "{:,.0f}",
                      "Tiền lãi": "{:,.0f}", "Tiền lỗ": "{:,.0f}", "Số CP": "{:,.0f}", "R:R": "{:.1f}",
-                     "% lãi": "{:+.1f}%", "GTGD (tỷ)": "{:,.1f}"}, na_rep="–"),
+                     "% lãi": "{:+.1f}%", "GTGD (tỷ)": "{:,.1f}", "Sức khỏe": "{:.1f}", "P/E": "{:.1f}",
+                     "ROE %": "{:.1f}", "Tăng LN %": "{:+.0f}"}, na_rep="–"),
                     hide_index=True, width="stretch", height=420)
                 st.download_button("⬇ Tải bảng (CSV)", hien.to_csv(index=False).encode("utf-8-sig"),
                                    file_name=f"nen_mua_{tam}.csv", mime="text/csv", width="stretch")
@@ -295,8 +436,15 @@ with tab0:
             with st.spinner(f"Đang phân tích {chon}…"):
                 kq, _, _ = phan_tich(chon, False)
             if kq.khung:
-                the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
+                kn = K.khuyen_nghi(kq, tam)
+                try:
+                    CB.dieu_chinh_khuyen_nghi(kn, CB.tom_tat_co_ban(kq.ma, kq.frames.get("D")))
+                except Exception:
+                    pass
+                the_khuyen_nghi(kn, von)
                 the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
+                with st.expander("🏢 Doanh nghiệp & chỉ số tài chính"):
+                    muc_chi_so(kq.ma)
                 chi_tiet(kq, None, "khuyen_nghi")
 
 with tab1:
@@ -314,14 +462,70 @@ with tab1:
             st.caption("Chỉ số không mua/bán trực tiếp được – chỉ xem xu hướng và tín hiệu đỉnh.")
             the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
         elif kq.khung and kq.loai == "vn" and tam in kq.frames:
-            the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
-            the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
+            t_kt, t_dn, t_tc, t_cs = st.tabs(["📈 Kỹ thuật", "🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số"])
+            with t_dn:
+                muc_doanh_nghiep(kq.ma)
+            with t_tc:
+                muc_tai_chinh(kq.ma)
+            with t_cs:
+                muc_chi_so(kq.ma)
+            with t_kt:
+                kn = K.khuyen_nghi(kq, tam)
+                try:
+                    CB.dieu_chinh_khuyen_nghi(kn, CB.tom_tat_co_ban(kq.ma, kq.frames.get("D")))
+                except Exception:
+                    pass
+                the_khuyen_nghi(kn, von)
+                the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
+                chi_tiet(kq, tl, "tra_cuu")
+            kq = None
         elif kq.khung:
             st.caption("Khuyến nghị mua & máy tính lãi/lỗ áp dụng cho cổ phiếu Việt Nam.")
             khung_dinh = "4H" if kq.loai == "fx" else "D"
             if khung_dinh in kq.frames:
                 the_tin_hieu_dinh(K.tin_hieu_dinh(kq, khung_dinh, loai=kq.loai))
-        chi_tiet(kq, tl, "tra_cuu")
+        if kq is not None:
+            chi_tiet(kq, tl, "tra_cuu")
+
+with tab_loc:
+    kho = kho_thi_truong()
+    doc_file_thi_truong(kho)
+    b0 = kho.get(tam)
+    if b0 is None or b0.empty or "Sức khỏe" not in b0:
+        st.info("Chưa có số liệu cơ bản – vào tab **Khuyến nghị** bấm **Quét toàn thị trường**.")
+    else:
+        st.caption(f"Lọc {len(b0)} mã đủ thanh khoản theo số liệu cơ bản + kỹ thuật (cập nhật {kho['luc']}).")
+        c1, c2 = st.columns(2)
+        pe_max = c1.number_input("P/E tối đa", 0.0, 200.0, 20.0, 1.0)
+        roe_min = c2.number_input("ROE tối thiểu (%)", -50.0, 100.0, 10.0, 1.0)
+        ln_min = c1.number_input("Tăng trưởng LN tối thiểu (%)", -100.0, 500.0, 0.0, 5.0)
+        no_max = c2.number_input("Nợ vay/Vốn chủ tối đa (lần)", 0.0, 20.0, 2.0, 0.1)
+        sk_min = c1.slider("Sức khỏe tài chính tối thiểu", 1.0, 5.0, 3.0, 0.5)
+        bo_lo = c2.checkbox("Bỏ doanh nghiệp đang lỗ", value=True)
+        chi_ctck = c2.checkbox("Chỉ mã CTCK khuyến nghị MUA", value=False)
+        kt = st.multiselect("Khuyến nghị kỹ thuật", K.MUC[::-1], default=K.MUC[::-1], key="loc_kt")
+        b = b0.copy()
+        b = b[(b["P/E"].isna() | (b["P/E"] <= pe_max)) & (b["P/E"].fillna(1) > 0)]
+        b = b[b["ROE %"].fillna(-999) >= roe_min] if roe_min > -50 else b
+        b = b[b["Tăng LN %"].fillna(-999) >= ln_min] if ln_min > -100 else b
+        b = b[b["Nợ/VCSH"].isna() | (b["Nợ/VCSH"] <= no_max)]
+        b = b[b["Sức khỏe"].fillna(0) >= sk_min]
+        if bo_lo:
+            b = b[b["Đang lỗ"] != True]  # noqa: E712
+        if chi_ctck:
+            b = b[b["CTCK"] == "MUA"]
+        b = b[b["Khuyến nghị"].isin(kt)]
+        st.metric("Số mã đạt", len(b))
+        cot = [c for c in ["Mã", "Ngành", "Khuyến nghị", "Giá", "P/E", "P/B", "ROE %", "Tăng LN %", "Tăng DT %",
+                           "Nợ/VCSH", "Cổ tức %", "Sức khỏe", "CTCK", "Giá mục tiêu", "Giá mua", "Chốt lời", "R:R",
+                           "GTGD (tỷ)"] if c in b]
+        st.dataframe(b[cot].sort_values(["Sức khỏe", "ROE %"], ascending=False).style.format(
+            {"Giá": "{:,.0f}", "Giá mua": "{:,.0f}", "Chốt lời": "{:,.0f}", "Giá mục tiêu": "{:,.0f}",
+             "P/E": "{:.1f}", "P/B": "{:.2f}", "ROE %": "{:.1f}", "Tăng LN %": "{:+.0f}", "Tăng DT %": "{:+.0f}",
+             "Nợ/VCSH": "{:.2f}", "Cổ tức %": "{:.1f}", "Sức khỏe": "{:.1f}", "R:R": "{:.1f}",
+             "GTGD (tỷ)": "{:,.1f}"}, na_rep="–"), hide_index=True, width="stretch", height=480)
+        st.download_button("⬇ Tải kết quả lọc (CSV)", b[cot].to_csv(index=False).encode("utf-8-sig"),
+                           file_name="bo_loc.csv", mime="text/csv", width="stretch")
 
 with tab2:
     st.caption("Nhập các mã đang nắm giữ. Khi chạy trên máy tính, danh mục được lưu vào danh_muc.csv; "

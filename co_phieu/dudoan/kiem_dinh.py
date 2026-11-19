@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import du_lieu, khuyen_nghi as K, quet
+from . import co_ban, du_lieu, khuyen_nghi as K, quet
 
 CHI_PHI = (1 + K.PHI_MUA), (1 - K.PHI_BAN - K.THUE_BAN)
 
@@ -33,7 +33,9 @@ def _giao_dich(o, h, l, c, j0, gia_vao, sl, tp, het):
     return c[het] * CHI_PHI[1] / (gia_vao * CHI_PHI[0]) - 1, "hết hạn", het - j0
 
 
-def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, giu: int = 60) -> dict:
+def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, giu: int = 60,
+                 quy: pd.DataFrame | None = None, ho_so: dict | None = None) -> dict:
+    """`quy`, `ho_so`: dữ liệu BCTC quý & hồ sơ (nếu có) để chấm sức khỏe tài chính TẠI từng thời điểm."""
     o, h, l, c = (df[x].to_numpy(float) for x in ("open", "high", "low", "close"))
     n = len(df)
     out = {"ma": ma, "mua": [], "cho": [], "ban": [], "theo_doi_dinh": [], "goc": [], "khong_mua": []}
@@ -44,46 +46,76 @@ def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, g
             dinh = K.tin_hieu_dinh(kq, "D")
         except Exception:
             continue
+        sk = None
+        if quy is not None and not quy.empty:
+            try:
+                s_ = co_ban.suc_khoe(ma, ngay=df.index[i], gia=c[i], quy=quy,
+                                     la_ngan_hang=bool((ho_so or {}).get("isBank")),
+                                     so_cp=(ho_so or {}).get("issueShare"))
+                sk = (s_.tong, bool(s_.chi_tiet.get("ln_ttm") is not None and s_.chi_tiet["ln_ttm"] < 0)) \
+                    if s_.du_lieu else None
+            except Exception:
+                sk = None
         r20, r60 = c[i + 20] / c[i] - 1, c[i + 60] / c[i] - 1
-        out["goc"].append((r20, r60, c[i + 60] * CHI_PHI[1] / (o[i + 1] * CHI_PHI[0]) - 1))
+        out["goc"].append((r20, r60, c[i + 60] * CHI_PHI[1] / (o[i + 1] * CHI_PHI[0]) - 1, sk))
         k = kn["D"]
         if k.muc in ("Mua", "Mua mạnh") and k.cat_lo and k.chot_loi1:
             vao = o[i + 1]
             if k.cat_lo < vao < k.chot_loi1:
                 lai, kqua, ngay = _giao_dich(o, h, l, c, i + 1, vao, k.cat_lo, k.chot_loi1, i + giu)
-                out["mua"].append((k.muc, lai, kqua, ngay, r20))
+                out["mua"].append((k.muc, lai, kqua, ngay, r20, sk))
         elif k.muc == "Chờ về vùng mua" and k.gia_mua and k.cat_lo and k.chot_loi1:
             for j in range(i + 1, min(i + 21, n - 1)):
                 if l[j] <= k.gia_mua:
                     vao = min(o[j], k.gia_mua)
                     lai, kqua, ngay = _giao_dich(o, h, l, c, j, vao, k.cat_lo, k.chot_loi1, min(j + giu, n - 1))
-                    out["cho"].append((lai, kqua, ngay))
+                    out["cho"].append((lai, kqua, ngay, sk))
                     break
         elif k.muc == "Không mua":
             out["khong_mua"].append(r20)
         if dinh.hang >= 2:
-            out["ban"].append((dinh.muc, r20, c[i + 10] / c[i] - 1, float(h[i + 1:i + 21].max() / c[i] - 1)))
+            out["ban"].append((dinh.muc, r20, c[i + 10] / c[i] - 1, float(h[i + 1:i + 21].max() / c[i] - 1), sk))
         elif dinh.hang == 1:
             out["theo_doi_dinh"].append(r20)
     return out
 
 
-def _tai(ma):
+def _tai(ma, lay_co_ban=True):
     try:
-        return ma, du_lieu._vci(ma, "D")
+        df = du_lieu._vci(ma, "D")
     except Exception:
-        return ma, None
+        return ma, None, None, None
+    quy = hs = None
+    if lay_co_ban:
+        try:
+            quy = co_ban.gan_gia_cong_bo(co_ban._chuoi_quy(ma), df)
+            hs = co_ban.ho_so_raw(ma)
+        except Exception:
+            quy = hs = None
+    return ma, df, quy, hs
+
+
+def _lenh(x):
+    """Chuẩn hoá: (lãi, kết quả, số phiên, sức khỏe) cho cả lệnh Mua (6 phần tử) và lệnh chờ (4)."""
+    return (x[1], x[2], x[3], x[5]) if len(x) == 6 else (x[0], x[1], x[2], x[3])
 
 
 def _tom_tat_lenh(ds):
     if not ds:
         return {"so_lenh": 0}
-    lai = np.array([x[-4] if len(x) == 5 else x[0] for x in ds])
-    kq = [x[-3] if len(x) == 5 else x[1] for x in ds]
+    ds = [_lenh(x) for x in ds]
+    lai = np.array([x[0] for x in ds])
+    kq = [x[1] for x in ds]
     return {"so_lenh": len(ds), "ti_le_thang": float((lai > 0).mean()), "lai_tb": float(lai.mean()),
             "lai_trung_vi": float(np.median(lai)), "cham_tp": kq.count("chốt lời") / len(ds),
             "cham_sl": kq.count("cắt lỗ") / len(ds), "het_han": kq.count("hết hạn") / len(ds),
-            "ngay_giu_tb": float(np.mean([x[-2] if len(x) == 5 else x[2] for x in ds]))}
+            "ngay_giu_tb": float(np.mean([x[2] for x in ds]))}
+
+
+NHOM_SK = [("Sức khỏe ≥ 4 & đang lãi", lambda sk: sk and not sk[1] and sk[0] >= 4),
+           ("Sức khỏe 3 – 3,9", lambda sk: sk and not sk[1] and 3 <= sk[0] < 4),
+           ("Sức khỏe < 3 hoặc đang lỗ", lambda sk: sk and (sk[1] or sk[0] < 3)),
+           ("Không đủ dữ liệu BCTC", lambda sk: sk is None)]
 
 
 def tong_hop(ket_qua: list[dict]) -> dict:
@@ -116,15 +148,31 @@ def tong_hop(ket_qua: list[dict]) -> dict:
             res[ten] = {"so": 0}
     res["theo_doi_dinh"] = {"so": int(len(td)), "ti_le_dung_20": float((td < 0).mean()) if len(td) else None,
                             "r20_tb": float(td.mean()) if len(td) else None}
+    # Phân theo sức khỏe tài chính tại thời điểm báo tín hiệu
+    cho = [x for r in ket_qua for x in r["cho"]]
+    goc_all = [x for r in ket_qua for x in r["goc"]]
+    res["theo_suc_khoe"] = []
+    for ten, loc in NHOM_SK:
+        g = [x for x in goc_all if loc(x[3] if len(x) > 3 else None)]
+        b = [x for x in ban if loc(x[4] if len(x) > 4 else None)]
+        rb = np.array([x[1] for x in b])
+        res["theo_suc_khoe"].append({
+            "nhom": ten,
+            "mua": _tom_tat_lenh([x for x in mua if loc(x[5])]),
+            "cho": _tom_tat_lenh([x for x in cho if loc(x[3])]),
+            "goc_giu_60": float(np.mean([x[2] for x in g])) if g else None,
+            "goc_so": len(g),
+            "ban_so": len(b), "ban_dung": float((rb < 0).mean()) if len(b) else None,
+        })
     return res
 
 
 def chay(ds_ma: list[str], buoc: int = 5, so_diem: int = 100, so_tien_trinh: int = 4, tien_trinh=None) -> dict:
     with ThreadPoolExecutor(6) as ex:
-        data = [(m, d) for m, d in ex.map(_tai, ds_ma) if d is not None and len(d) > 400]
+        data = [x for x in ex.map(_tai, ds_ma) if x[1] is not None and len(x[1]) > 400]
     ket_qua = []
     with ProcessPoolExecutor(so_tien_trinh) as ex:
-        futs = [ex.submit(kiem_dinh_ma, m, d, buoc, so_diem) for m, d in data]
+        futs = [ex.submit(kiem_dinh_ma, m, d, buoc, so_diem, 60, q, h) for m, d, q, h in data]
         for i, f in enumerate(futs, 1):
             try:
                 ket_qua.append(f.result())
@@ -176,6 +224,15 @@ def markdown(t: dict, luc: str) -> str:
                         f"{_p(x['con_tang_them_tb'])} |")
         else:
             dong.append(f"| {ten} | 0 | – | – | – | – |")
+    if t.get("theo_suc_khoe"):
+        dong += ["", "## Kết hợp sức khỏe tài chính (chấm TẠI thời điểm báo, chỉ dùng BCTC đã công bố)",
+                 "| Nhóm | Mua bất kỳ, giữ 60 phiên | Tín hiệu Mua: số lệnh | thắng | lãi TB | Lệnh chờ: số | thắng | lãi TB | Bán ở đỉnh: số | đúng |",
+                 "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for x in t["theo_suc_khoe"]:
+            m, c_ = x["mua"], x["cho"]
+            dong.append(f"| {x['nhom']} | {_p(x['goc_giu_60'])} ({x['goc_so']:,}) | {m['so_lenh']} | "
+                        f"{_pp(m.get('ti_le_thang'))} | {_p(m.get('lai_tb'))} | {c_['so_lenh']} | "
+                        f"{_pp(c_.get('ti_le_thang'))} | {_p(c_.get('lai_tb'))} | {x['ban_so']} | {_pp(x['ban_dung'])} |")
     td = t["theo_doi_dinh"]
     dong += ["", f"Theo dõi đỉnh ({td['so']} lần): đúng {_pp(td['ti_le_dung_20'])}, TB 20 phiên {_p(td['r20_tb'])}.",
              "", "> Lưu ý: chỉ gồm các mã còn niêm yết và đủ thanh khoản hôm nay (thiên lệch sống sót); "
