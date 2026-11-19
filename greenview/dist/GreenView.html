@@ -3060,7 +3060,7 @@ window.App = window.App || {};
       const ten = THANG_KHUNG.slice(k0 + 1, k0 + 3).map(b => ({ 3600: '1H', 14400: '4H', 86400: 'D', 604800: 'W', M: 'M' })[b]).join(' + ');
       return { markers: mk, backtest: { trades, equity, net: cash - cap0, netPct: (cash / cap0 - 1) * 100, n: trades.length, winRate: trades.length ? wins.length / trades.length * 100 : 0,
         pf: gl ? gp / gl : gp ? Infinity : 0, mdd, avg: trades.length ? (cash - cap0) / trades.length : 0, buyHold: (D.c[n - 1] / D.c[0] - 1) * 100,
-        note: `Long khi khung đang xem + ${ten} cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD > tín hiệu, Sto 13-13-5 %K > %D), ADX khung ${ten.split(' ')[0]} ≥ ${I.adx} với DI+ > DI−, nến tăng + MACD+Sto Mua1/Mua2 hoặc MA5 cắt lên MA10. Short = đối xứng tuyệt đối. Cắt lỗ đỉnh/đáy gần nhất (tối đa 3 ATR), rủi ro ${I.rui}% vốn/lệnh; thoát khi khung ${ten.split(' ')[0]} có tín hiệu MACD+Sto ngược chiều${I.loc !== 'Tắt' ? ' hoặc giá cắt MA200 ngày ngược hướng' : ''}. Backtest toàn bộ (lọc BTC/DXY) xem co_phieu/nghien_cuu.` } };
+        note: `Long khi khung đang xem + ${ten} cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD > tín hiệu, Sto 13-13-5 %K > %D), ADX khung ${ten.split(' ')[0]} ≥ ${I.adx} với DI+ > DI−, nến tăng + MACD+Sto Mua1/Mua2 hoặc MA5 cắt lên MA10. Short = đối xứng tuyệt đối. Cắt lỗ đỉnh/đáy gần nhất (tối đa 3 ATR), rủi ro ${I.rui}% vốn/lệnh; thoát khi khung ${ten.split(' ')[0]} có tín hiệu MACD+Sto ngược chiều${I.loc !== 'Tắt' ? ' hoặc giá cắt MA200 ngày ngược hướng' : ''}. Kiểm định (forex, vàng, coin; lọc BTC/DXY; mọi khung): KHÔNG có lợi thế – forex lỗ mọi khung từ 1H, coin ngày +3,9%/năm nhưng ngang vào ngẫu nhiên và thua giữ BTC; chi tiết co_phieu/nghien_cuu/ket_qua_fx_long_short.md.` } };
     }
   };
 
