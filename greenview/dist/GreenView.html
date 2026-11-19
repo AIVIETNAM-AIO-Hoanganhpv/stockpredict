@@ -2611,7 +2611,7 @@ window.App = window.App || {};
   function moPhongLo(D, R, I) {
     // R: { vt(i)->{stop} | null, xn(i, fillVT)->{stop} | null, banPhan(i)->bool, banHet(i)->bool, tenBan }
     const n = D.n, cap0 = (App.settings.bt || {}).capital || 10000, phi = (I.phi != null ? I.phi : 0.15) / 100, thue = (I.thue || 0) / 100;
-    let cash = cap0, peak = cap0, mdd = 0, lo = [], cho = null, daBanPhan = false, fillVT = null;
+    let cash = cap0, peak = cap0, mdd = 0, lo = [], cho = null, daBanPhan = false, fillVT = null, tpChung = null;
     const trades = [], equity = [], mk = [];
     const dong = (l, i, px, phan, why) => {
       const q = l.q * phan, val = q * px * (1 - phi - thue), von = q * l.ep * (1 + phi);
@@ -2624,12 +2624,12 @@ window.App = window.App || {};
         const o = D.o[i];
         if (cho.k === 'het' && lo.length) { lo.forEach(l => dong(l, i, o, 1, R.tenBan || 'Bán hết')); lo = []; mk.push({ i, pos: 'aboveBar', shape: 'arrowDown', color: '#f23645', text: 'Bán hết' }); }
         else if (cho.k === 'phan' && lo.length) { lo.forEach(l => dong(l, i, o, I.phan / 100, `Bán ${I.phan}%`)); mk.push({ i, pos: 'aboveBar', shape: 'circle', color: '#ff9800', text: `Bán ${I.phan}%` }); }
-        else if ((cho.k === 'vt' || cho.k === 'xn') && o > cho.stop) {
+        else if ((cho.k === 'vt' || cho.k === 'xn') && o > cho.stop && !(cho.tp && o >= cho.tp)) {
           const eq = cash + lo.reduce((a, l) => a + l.q * o, 0), tien = Math.min(cash, eq * (cho.k === 'vt' ? 0.3 : 0.7));
           if (tien > 0) {
             const q = tien / (o * (1 + phi)); cash -= q * o * (1 + phi);
-            lo.push({ ei: i, ep: o, q, stop: cho.stop, k: cho.k });
-            if (cho.k === 'vt') { fillVT = o; daBanPhan = false; }
+            lo.push({ ei: i, ep: o, q, stop: cho.stop, k: cho.k, tp: cho.k === 'vt' ? cho.tp : tpChung });
+            if (cho.k === 'vt') { fillVT = o; daBanPhan = false; tpChung = cho.tp || null; if (cho.tp && R.veTp) R.veTp.push({ i, tp: cho.tp, j: null }); }
             mk.push({ i, pos: 'belowBar', shape: 'arrowUp', color: cho.k === 'vt' ? '#2962ff' : '#089981', text: cho.k === 'vt' ? 'Vị thế 30%' : 'Xác nhận 70%' });
           }
         }
@@ -2638,14 +2638,19 @@ window.App = window.App || {};
       // 2) cắt lỗ trong phiên (mỗi lệnh 1 mức)
       lo.forEach(l => { if (D.l[i] < l.stop) { dong(l, i, Math.min(D.o[i], l.stop), 1, 'Cắt lỗ'); mk.push({ i, pos: 'belowBar', shape: 'square', color: '#f23645', text: 'Cắt lỗ' }); } });
       lo = lo.filter(l => l.q > 1e-12);
-      if (!lo.length) fillVT = null;
+      // chốt lời tại mục tiêu (nếu có): giá cao trong phiên chạm mục tiêu
+      const tpHit = lo.find(l => l.tp && D.h[i] >= l.tp);
+      if (tpHit) { const px = Math.max(D.o[i], tpHit.tp); lo.forEach(l => dong(l, i, px, 1, 'Chốt lời Fibo')); lo = [];
+        mk.push({ i, pos: 'aboveBar', shape: 'arrowDown', color: '#089981', text: 'Chốt lời Fibo' });
+        if (R.veTp && R.veTp.length) R.veTp[R.veTp.length - 1].j = i; }
+      if (!lo.length) { if (fillVT != null && R.veTp && R.veTp.length && R.veTp[R.veTp.length - 1].j == null) R.veTp[R.veTp.length - 1].j = i; fillVT = null; }
       // 3) tín hiệu ở giá đóng cửa → lệnh chờ phiên sau
       if (i < n - 1) {
         if (lo.length) {
           if (R.banHet(i)) cho = { k: 'het' };
           else if (!daBanPhan && R.banPhan && R.banPhan(i)) { cho = { k: 'phan' }; daBanPhan = true; }
           else if (!daBanPhan && fillVT != null && !lo.some(l => l.k === 'xn')) { const x = R.xn(i, fillVT); if (x) cho = { k: 'xn', stop: x.stop }; }
-        } else { const v = R.vt(i); if (v) cho = { k: 'vt', stop: v.stop }; }
+        } else { const v = R.vt(i); if (v) cho = { k: 'vt', stop: v.stop, tp: v.tp || null }; }
       }
       const eq = cash + lo.reduce((a, l) => a + l.q * D.c[i], 0);
       equity.push(eq); peak = Math.max(peak, eq); mdd = Math.max(mdd, (peak - eq) / peak * 100);
@@ -2801,6 +2806,34 @@ window.App = window.App || {};
       cuoi: { D: upD[D.n - 1], W: upW[W.B.n - 2] ?? false, M: upM[M.B.n - 2] ?? false } };
   };
 
+  // Mục tiêu chốt lời Fibo trên sóng của khung lệnh (W/M), tại ngày j: A đáy trước B, B đỉnh gần nhất (k=2, đã xác nhận),
+  // C thấp nhất từ sau B đến j; hồi = (B−C)/(B−A) → 1.618 (<0,441) · 1.272 (<0,691) · 1.0; nâng mức nếu ≤ giá vào +1%.
+  App.fiboSong = function (D, X, j, giaVao, k = 2) {
+    let w = -1; for (let q = 0; q < X.B.n - 1; q++) if (X.cuoi[q] >= 0 && X.cuoi[q] <= j) w = q;
+    if (w < 2 * k + 2) return null;
+    const B_ = X.B; let ib = -1, ia = -1;
+    for (let p = w - k; p >= k; p--) { let ok = true; for (let q = p - k; q <= p + k; q++) if (B_.h[q] > B_.h[p]) ok = false; if (ok) { ib = p; break; } }
+    if (ib < 0) return null;
+    for (let p = ib - 1; p >= k; p--) { let ok = true; for (let q = p - k; q <= Math.min(p + k, w); q++) if (B_.l[q] < B_.l[p]) ok = false; if (ok) { ia = p; break; } }
+    if (ia < 0) return null;
+    const thu = (A, B, C, moi) => {
+      if (!(B > A && C >= A)) return null;
+      const sau = (B - C) / (B - A); const tl0 = sau < 0.441 ? 1.618 : sau < 0.691 ? 1.272 : 1.0;
+      for (const x of [1.0, 1.272, 1.618, 2.0, 2.618]) { if (x < tl0) continue; const tp = C + x * (B - A); if (tp > giaVao * 1.01) return { tp, tl: x, sau, A, B, C, moi }; }
+      return null;
+    };
+    let C = Infinity, ic = X.cuoi[ib];
+    for (let q = X.cuoi[ib] + 1; q <= j; q++) if (D.l[q] < C) { C = D.l[q]; ic = q; }
+    if (!isFinite(C)) C = B_.l[ib];
+    const cu = C > B_.l[ia] ? thu(B_.l[ia], B_.h[ib], C, false) : null;
+    if (cu) return cu;
+    // sóng cũ hỏng (phá đáy A) hoặc quá nhỏ so với giá → đo SÓNG MỚI: A = đáy thấp nhất sau đỉnh cũ, B = đỉnh cao nhất sau đó, C = đáy hồi sau B
+    const A = Math.min(C, B_.l[ia]); let ibd = ic, B = -Infinity;
+    for (let q = Math.max(0, ic); q <= j; q++) if (D.h[q] > B) { B = D.h[q]; ibd = q; }
+    let C2 = D.l[j]; for (let q = ibd; q <= j; q++) C2 = Math.min(C2, D.l[q]);
+    return thu(A, B, C2, true);
+  };
+
   DEFS.sp_dong_pha = {
     id: 'sp_dong_pha', name: 'Đồng pha Ngày / Tuần / Tháng', cat: 'stockpredict', overlay: true, plots: [], levels: [],
     inputs: [['op', 'Độ đậm nền (%)', 14, 'int']],
@@ -2820,6 +2853,7 @@ window.App = window.App || {};
     id: 'st_dongpha', name: 'Khoá học — Đồng pha N/T/Th: vào khung ngày, giữ tuần/tháng', cat: 'strategy', overlay: true, plots: [], levels: [],
     inputs: [['lenh', 'Loại lệnh', 'Lệnh tuần', 'sel', ['Lệnh tuần', 'Lệnh tháng']],
       ['vao', 'Tín hiệu vào (khung ngày)', '2MA hoặc MACD+Sto', 'sel', ['2MA hoặc MACD+Sto', '2MA', 'MACD+Sto']],
+      ['chot', 'Chốt lời', 'Fibonacci theo sóng tuần/tháng', 'sel', ['Fibonacci theo sóng tuần/tháng', 'Không (chỉ tín hiệu bán)']],
       ['ban', 'Cách bán', 'Bán hết khi có tín hiệu bán', 'sel', ['Bán hết khi có tín hiệu bán', 'Bán 70% rồi bán nốt']],
       ['phan', 'Phần bán lần đầu (%)', 70, 'int'], ['phi', 'Phí mỗi chiều (%)', 0.15, 'float'], ['thue', 'Thuế khi bán (%)', 0.1, 'float']],
     calc(D, I) {
@@ -2833,13 +2867,16 @@ window.App = window.App || {};
         for (let x = Math.max(1, j - 2); x <= j; x++) { let deu = true; for (let q = x; q <= j; q++) if (!tren(q, cp)) deu = false; if (deu && !tren(x - 1, cp)) cat = true; }
         return cat && c[j] > ma[cp[0]][j] && c[j] > ma[cp[1]][j]; };
       const banTF = I.lenh === 'Lệnh tháng' ? P.banM : P.banW;
+      const KW = khungLonTuNgay(D, 'W'), KM = khungLonTuNgay(D, 'M'), veTp = [];
       const mDay = T.sub(T.ema(c, 12), T.ema(c, 26)), sDay = T.ema(mDay, 9);
       let lan = 0;
       const R = {
         vt(j) {
           if (j < 30 || !P.dongPha[j] || !(c[j] > D.o[j])) return null;
           const ok = (I.vao !== 'MACD+Sto' && maLen(j)) || (I.vao !== '2MA' && (S.Mua1[j] || S.Mua2[j]));
-          if (!ok) return null; lan = 0; const sl = dayGanNhat(D, j); return sl != null ? { stop: sl } : null;
+          if (!ok) return null; lan = 0; const sl = dayGanNhat(D, j); if (sl == null) return null;
+          const fb = I.chot.startsWith('Fibonacci') ? App.fiboSong(D, I.lenh === 'Lệnh tháng' ? KM : KW, j, c[j]) : null;
+          return { stop: sl, tp: fb ? fb.tp : null };
         },
         xn(j, fill) {
           if (!P.dongPha[j] || !(c[j] > D.o[j] && c[j] > fill)) return null;
@@ -2848,10 +2885,13 @@ window.App = window.App || {};
         },
         banPhan: I.ban === 'Bán 70% rồi bán nốt' ? (i => banTF[i] && ++lan === 1) : null,
         banHet: i => I.ban === 'Bán 70% rồi bán nốt' ? (lan >= 1 && (banTF[i] || (mDay[i] < sDay[i] && mDay[i - 1] >= sDay[i - 1]))) : banTF[i],
-        tenBan: `Tín hiệu bán MACD+Sto ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'}`,
+        tenBan: `Tín hiệu bán MACD+Sto ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'}`, veTp,
         note: `Đồng pha: chỉ vào khi Ngày + Tuần + Tháng cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD trên tín hiệu, Sto 13-13-5 %K>%D); vào lệnh theo tín hiệu khung ngày (${I.vao}); bán theo tín hiệu bán MACD+Sto khung ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'} hoặc cắt lỗ đáy ngày gần nhất. Kiểm định chứng khoán VN 2020–2026 (vốn 1 tỷ): +16,9%/năm nhưng 97% lợi nhuận từ 1 lệnh HQC – bỏ HQC còn +3,9%/năm (mua & giữ +9,8%); vào ngẫu nhiên trong ngày đồng pha +6,6%. Chưa có lợi thế đáng tin.`
       };
-      return moPhongLo(D, R, I);
+      const r = moPhongLo(D, R, I);
+      r.draw = (g, X) => veTp.forEach(v => { const x1 = X.x(v.i), x2 = X.x(v.j != null ? v.j : D.n - 1); if (x1 == null || x2 == null) return;
+        X.seg(g, x1, X.y(v.tp), x2, X.y(v.tp), '#089981', [5, 4], 1.5); X.label(g, x1 + 50, X.y(v.tp) - 9, 'Fibo ' + App.fmtPrice(v.tp), '#089981'); });
+      return r;
     }
   };
 

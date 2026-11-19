@@ -657,6 +657,21 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
     kh["vi_sao"] = ([f"Xu hướng: khung {tam} {xh[kqk.xu_huong] if kqk else '?'}, khung {lon_ten} "
                      f"{xh[lon.xu_huong] if lon else '?'} · điểm tổng {kn.diem:+.0f}/100 (cần ≥ {NGUONG_MUA:.0f} để mua)."]
                    + ["✔ " + x for _, x in ung_ho[:4]] + ["✖ " + x for _, x in phan_doi[:3]])
+    # Chốt lời theo Fibonacci của sóng tăng gần nhất trên khung lệnh (tài liệu: "hồi ít thì lên nhiều")
+    kh["fibo"] = None
+    try:
+        from . import fibo as F
+        if kq.frames.get("D") is not None and kn.gia_mua:
+            fb = F.muc_tieu_song(kq.frames["D"], tam, kn.gia_mua)
+            if fb:
+                fb["chot_loi"] = lam_tron(fb["chot_loi"], loai_gia(kq.ma, kq.loai), xuong=False)
+                fb["lai_pct"] = fb["chot_loi"] / kn.gia_mua - 1
+                fb["vi_sao"] = (f"Sóng {tam}: đáy A {_d(fb['A'])} ({fb['ngay_A']:%m/%Y}) → đỉnh B {_d(fb['B'])} ({fb['ngay_B']:%m/%Y}), "
+                                f"hồi về C {_d(fb['C'])} = {fb['do_sau']:.0%} biên độ → mức mở rộng {str(fb['ti_le']).replace('.', ',')} "
+                                f"(hồi ít thì lên nhiều): C + {str(fb['ti_le']).replace('.', ',')} × (B − A).")
+                kh["fibo"] = fb
+    except Exception:
+        kh["fibo"] = None
     kh["tom_tat"] = (f"Mua ~{_d(kn.gia_mua)}, cắt lỗ {_d(kn.cat_lo)} ({kn.lo_pct:+.1%}), chốt lời {_d(kn.chot_loi1)} "
                      f"({kn.lai_pct:+.1%})" if kn.gia_mua and kn.cat_lo and kn.chot_loi1 and kn.lo_pct is not None else "")
     return kh
