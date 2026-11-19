@@ -2428,6 +2428,36 @@ window.App = window.App || {};
     }
   };
 
+  /* ---------------- Chỉ báo: Đỉnh/đáy thật (để so với tín hiệu) ---------------- */
+  // Đỉnh/đáy "thật" = điểm cao/thấp nhất trong ±N nến VÀ cách đáy/đỉnh trước ≥ X% (zigzag).
+  // Chỉ dùng để NHÌN LẠI QUÁ KHỨ: điểm gần cuối biểu đồ chưa được xác nhận (cần N nến sau đó).
+  DEFS.sp_dinh_day = {
+    id: 'sp_dinh_day', name: 'Đỉnh/đáy thật (để so sánh)', cat: 'stockpredict', overlay: true, plots: [], levels: [],
+    inputs: [['n', 'Số nến mỗi bên', 10, 'int'], ['pct', 'Biên độ tối thiểu (%)', 8, 'float'], ['nhan', 'Ghi giá & % trên nhãn', true, 'bool']],
+    calc(D, I) {
+      const n = Math.max(2, I.n | 0), mk = [], dd = [];
+      for (let i = n; i < D.n - n; i++) {
+        let hi = true, lo = true;
+        for (let j = i - n; j <= i + n; j++) { if (j === i) continue; if (D.h[j] > D.h[i]) hi = false; if (D.l[j] < D.l[i]) lo = false; }
+        if (hi) dd.push({ i, p: D.h[i], k: 'H' }); if (lo) dd.push({ i, p: D.l[i], k: 'L' });
+      }
+      // gộp thành zigzag xen kẽ, bỏ sóng nhỏ hơn X%
+      const z = [];
+      dd.forEach(x => {
+        const t = z[z.length - 1];
+        if (!t) return z.push(x);
+        if (t.k === x.k) { if ((x.k === 'H' && x.p > t.p) || (x.k === 'L' && x.p < t.p)) z[z.length - 1] = x; return; }
+        if (Math.abs(x.p / t.p - 1) * 100 >= I.pct) z.push(x);
+      });
+      z.forEach((x, k) => {
+        const tr = z[k - 1], ch = tr ? (x.p / tr.p - 1) * 100 : null;
+        mk.push({ i: x.i, pos: x.k === 'H' ? 'aboveBar' : 'belowBar', shape: 'square', color: x.k === 'H' ? '#f23645' : '#089981',
+          text: (x.k === 'H' ? 'ĐỈNH' : 'ĐÁY') + (I.nhan ? ` ${App.fmtPrice(x.p)}${ch != null ? ` (${ch > 0 ? '+' : ''}${ch.toFixed(0)}%)` : ''}` : '') });
+      });
+      return { markers: mk, draw(g, X) { for (let k = 1; k < z.length; k++) X.seg(g, X.x(z[k - 1].i), X.y(z[k - 1].p), X.x(z[k].i), X.y(z[k].p), 'rgba(255,152,0,0.7)', [4, 3], 1.5); } };
+    }
+  };
+
   /* ---------------- Chiến lược: Dự đoán xu hướng (bản JS của quy tắc đã kiểm định) ---------------- */
   const sign = x => (x > 0 ? 1 : x < 0 ? -1 : 0), kep = x => Math.max(-1, Math.min(1, x));
 
@@ -3904,7 +3934,7 @@ window.App = window.App || {};
       else if (cur === 'pattern') {
         h = '<div class="isec">Mô hình biểu đồ</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'chart').map(row).join('')
           + '<div class="isec">Mô hình nến</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'candle').sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
-      } else if (cur === 'stockpredict') h = ['sp_plan', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
+      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_dinh_day', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
       else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
       else h = all.filter(d => d.cat === cur).sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
       $('#iList').innerHTML = h;
