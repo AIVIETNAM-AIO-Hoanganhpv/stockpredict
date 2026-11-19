@@ -29,9 +29,11 @@ def _so(x, nd=2):
     return round(x, nd) if math.isfinite(x) else None
 
 
-def _phan_tich(ma: str, df: pd.DataFrame):
+def _phan_tich(ma: str, df: pd.DataFrame, nhanh: bool = False):
+    """nhanh=True: chỉ khung W + D (khuyến nghị ngắn hạn chỉ cần 2 khung này) – dùng khi duyệt quá khứ."""
     loai, chuan = du_lieu.phan_loai(ma)
-    frames = {"M": du_lieu.resample(df, "M"), "W": du_lieu.resample(df, "W"), "D": df}
+    frames = {"W": du_lieu.resample(df, "W"), "D": df} if nhanh else \
+        {"M": du_lieu.resample(df, "M"), "W": du_lieu.resample(df, "W"), "D": df}
     ds = [phan_tich.phan_tich_khung(f, k) for k, f in frames.items()]
     kq = phan_tich.tong_hop(chuan, loai, ds)
     kq.frames = frames
@@ -63,7 +65,10 @@ def ke_hoach(ma: str, df: pd.DataFrame) -> dict:
     }
 
 
-def tin_hieu_qua_khu(ma: str, df: pd.DataFrame, so_phien: int = 500, buoc: int = 3) -> list[dict]:
+CUA_SO_QUA_KHU = 600     # số phiên dùng cho mỗi lần phân tích lại quá khứ (đủ cho khung D và ~120 tuần)
+
+
+def tin_hieu_qua_khu(ma: str, df: pd.DataFrame, so_phien: int = 500, buoc: int = 4) -> list[dict]:
     """Các lần công cụ báo "Mua" trong `so_phien` phiên gần nhất (chỉ dùng dữ liệu đến từng ngày),
     giả lập lệnh theo đúng quy tắc: mua giá mở cửa phiên sau, thoát khi chạm cắt lỗ / chốt lời / hết 60 phiên.
     Không mở lệnh mới khi lệnh trước chưa đóng. Lãi đã trừ phí & thuế."""
@@ -77,7 +82,7 @@ def tin_hieu_qua_khu(ma: str, df: pd.DataFrame, so_phien: int = 500, buoc: int =
             i += 1
             continue
         try:
-            kq = _phan_tich(ma, df.iloc[max(0, i + 1 - 1500): i + 1])
+            kq = _phan_tich(ma, df.iloc[max(0, i + 1 - CUA_SO_QUA_KHU): i + 1], nhanh=True)
             kn = K.khuyen_nghi(kq, "D")
         except Exception:
             i += buoc

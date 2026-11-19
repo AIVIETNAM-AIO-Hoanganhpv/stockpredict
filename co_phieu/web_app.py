@@ -874,7 +874,8 @@ def trang_danh_muc():
              "%": "{:+.1f}%", "Cắt lỗ động": "{:,.0f}", "Chốt lời": "{:,.0f}", "Giá bán đề xuất": "{:,.0f}",
              "Lãi nếu bán": "{:,.0f}"}, na_rep="–"),
             hide_index=True, width="stretch")
-        st.markdown("##### Tin mới của các mã đang giữ")
+        if not st.toggle("📰 Xem tin mới của các mã đang giữ", key="dm_tin"):
+            return
         tin_dm = []
         for r in rows:
             if r["Mã"] in du_lieu.CHI_SO_VN or du_lieu.phan_loai(r["Mã"])[0] != "vn":
@@ -1080,38 +1081,43 @@ def xem_ma(ma: str, noi: str):
         except Exception:
             pass
         dinh = K.tin_hieu_dinh(kq, tam)
-        try:
-            with st.spinner("Đang kiểm tra các lần báo Mua trước đây của mã này…"):
-                tc = do_tin_cay(kq.ma)
-        except Exception:
-            tc = None
-        the_ket_luan(kq, kn, dinh, tc, K.giai_thich(kq, kn, von), diem_mh(kq.ma))
-        with st.expander("📋 Thêm: chốt lời từng phần, tín hiệu đỉnh, các lần báo Mua trước"):
+        the_ket_luan(kq, kn, dinh, None, K.giai_thich(kq, kn, von), diem_mh(kq.ma))
+        if st.toggle("🔎 Kiểm tra các lần công cụ báo Mua mã này trước đây (~5 giây)", key=f"tc_{noi}_{kq.ma}"):
+            try:
+                with st.spinner("Đang mô phỏng lại các lần báo Mua trong ~2 năm…"):
+                    tc = do_tin_cay(kq.ma)
+            except Exception as e:
+                tc = None
+                st.info(f"Chưa kiểm tra được: {str(e)[:120]}")
+            if tc is not None:
+                st.markdown(cau_tin_cay(tc).split("  \n")[0])
+                if tc["ds"]:
+                    st.dataframe(pd.DataFrame([{"Ngày mua": pd.Timestamp(x["t_mua"], unit="s").strftime("%d/%m/%Y"),
+                                                "Giá mua": x["gia_mua"], "Kết quả": x["ket_qua"],
+                                                "Ngày ra": pd.Timestamp(x["t_ra"], unit="s").strftime("%d/%m/%Y"),
+                                                "Lãi %": x["lai_pct"]} for x in tc["ds"]]).style.format(
+                        {"Giá mua": "{:,.0f}", "Lãi %": "{:+.1f}%"}), hide_index=True, width="stretch")
+        with st.expander("📋 Thêm: chốt lời từng phần, tín hiệu đỉnh chi tiết"):
             the_khuyen_nghi(kn, von)
             the_tin_hieu_dinh(dinh)
-            if tc and tc["ds"]:
-                st.markdown("**Các lần báo Mua trước đây**")
-                st.dataframe(pd.DataFrame([{"Ngày mua": pd.Timestamp(x["t_mua"], unit="s").strftime("%d/%m/%Y"),
-                                            "Giá mua": x["gia_mua"], "Kết quả": x["ket_qua"],
-                                            "Ngày ra": pd.Timestamp(x["t_ra"], unit="s").strftime("%d/%m/%Y"),
-                                            "Lãi %": x["lai_pct"]} for x in tc["ds"]]).style.format(
-                    {"Giá mua": "{:,.0f}", "Lãi %": "{:+.1f}%"}), hide_index=True, width="stretch")
-        t_bd, t_dn, t_tin, t_kt = st.tabs(["📈 Biểu đồ", "🏢 Doanh nghiệp", "📰 Tin tức", "🔬 Chi tiết chỉ báo"])
-        with t_bd:
+        # chỉ tải phần đang chọn (st.tabs chạy hết mọi thẻ → chậm)
+        muc = st.radio("Xem thêm", ["📈 Biểu đồ", "🏢 Doanh nghiệp", "📰 Tin tức", "🔬 Chi tiết chỉ báo"],
+                       horizontal=True, key=f"muc_{noi}_{kq.ma}", label_visibility="collapsed")
+        if muc == "📈 Biểu đồ":
             bieu_do_plotly(kq, noi)
-        with t_dn:
+        elif muc == "🏢 Doanh nghiệp":
             muc_doanh_nghiep(kq.ma)
             st.markdown("---")
             muc_chi_so(kq.ma, noi)
             with st.expander("📊 Báo cáo tài chính đầy đủ"):
                 muc_tai_chinh(kq.ma, noi)
-        with t_tin:
+        elif muc == "📰 Tin tức":
             try:
                 ten = (cb_ho_so(kq.ma)[0] or {}).get("ten_ngan")
             except Exception:
                 ten = None
             muc_tin_tuc(kq.ma, ten)
-        with t_kt:
+        else:
             chi_tiet(kq, tl, noi + "_kt", dau=False)
     else:
         the_xu_huong(kq)
@@ -1120,6 +1126,19 @@ def xem_ma(ma: str, noi: str):
             with st.expander("Tín hiệu đỉnh"):
                 the_tin_hieu_dinh(K.tin_hieu_dinh(kq, khung_dinh, loai=kq.loai))
         chi_tiet(kq, tl, noi, dau=False)
+
+
+def tai_song_song(ds: tuple):
+    """Tải giá nhiều mã cùng lúc (mỗi mã là 1 lần gọi mạng) – nhanh hơn tải lần lượt."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def tai(m):
+        try:
+            du_lieu.tai(m, "D")
+        except Exception:
+            pass
+    with ThreadPoolExecutor(6) as ex:
+        list(ex.map(tai, ds))
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -1153,7 +1172,9 @@ def trang_hom_nay():
         b = b.assign(_h=b["Khuyến nghị"].map(hang)).sort_values(["_h", "Điểm"], ascending=False)
         mua = b[b["Khuyến nghị"] == "Mua"]
         the = []
-        for _, r in b.head(max(5, len(mua))).iterrows():
+        ung_vien = b.head(max(5, len(mua)))
+        tai_song_song(tuple(ung_vien["Mã"]))
+        for _, r in ung_vien.iterrows():
             try:      # phân tích lại theo giá mới nhất để thẻ khớp với trang Tra cứu
                 kq_r, _, _ = phan_tich(r["Mã"], False)
                 kn_r = K.khuyen_nghi(kq_r, tam)
@@ -1226,7 +1247,7 @@ with t_tc:
     trang_tra_cuu()
 with t_dm:
     trang_danh_muc()
-    with st.expander("📋 Danh sách theo dõi (nhiều mã cùng lúc)"):
+    if st.toggle("📋 Phân tích danh sách theo dõi (nhiều mã cùng lúc)", key="td_bat"):
         trang_theo_doi()
 with t_nc:
     trang = st.radio("Mục", list(NANG_CAO), horizontal=True, key="nang_cao", label_visibility="collapsed")

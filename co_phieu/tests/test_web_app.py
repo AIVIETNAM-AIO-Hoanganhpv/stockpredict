@@ -40,6 +40,8 @@ def test_tra_cuu_va_danh_sach(gia_gia):
     assert "FPT" in md and ("Tăng" in md or "Giảm" in md or "Đi ngang" in md)
     assert {"🏠 Hôm nay", "🔍 Tra cứu mã", "💼 Danh mục của tôi", "🧰 Nâng cao"} <= {t.label for t in at.tabs}
     assert any(x in md for x in ("NÊN MUA", "KHÔNG MUA", "CHỜ", "CHƯA NÊN MUA"))   # thẻ kết luận rõ ràng
+    at.toggle(key="td_bat").set_value(True).run()       # danh sách theo dõi chỉ chạy khi bật
+    assert not at.exception, at.exception
     assert len(at.dataframe) >= 2                       # danh mục + danh sách theo dõi
 
     at.text_input[0].set_value("EURUSD")
@@ -89,8 +91,8 @@ def test_tra_cuu_doanh_nghiep_fpt(gia_gia):
     """FPT có dữ liệu doanh nghiệp mẫu → mục Doanh nghiệp (hồ sơ, chỉ số, BCTC) và Tin tức."""
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
     assert not at.exception, at.exception
-    nhan = [t.label for t in at.tabs]
-    assert {"📈 Biểu đồ", "🏢 Doanh nghiệp", "📰 Tin tức", "🔬 Chi tiết chỉ báo"} <= set(nhan)
+    at.radio(key="muc_tra_cuu_FPT").set_value("🏢 Doanh nghiệp").run()
+    assert not at.exception, at.exception
     assert any("Báo cáo tài chính" in e.label for e in at.expander)
     assert any("Lịch sử trả cổ tức" in e.label for e in at.expander)
     assert any("Công ty con" in e.label for e in at.expander)
@@ -172,6 +174,7 @@ def test_nguon_doanh_nghiep_loi_khong_lam_dung_app(gia_gia, monkeypatch):
     st.cache_data.clear()            # bỏ kết quả đã lưu tạm từ các test trước
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=180).run()
     assert not at.exception, at.exception
+    at.radio(key="muc_tra_cuu_FPT").set_value("🏢 Doanh nghiệp").run()
     assert any("mã lỗi 403" in i.value for i in at.info)
 
 
@@ -193,6 +196,7 @@ def test_doanh_nghiep_du_phong_vndirect(gia_gia, monkeypatch):
     st.cache_data.clear()            # bỏ kết quả đã lưu tạm từ các test trước
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=180).run()
     assert not at.exception, at.exception
+    at.radio(key="muc_tra_cuu_FPT").set_value("🏢 Doanh nghiệp").run()
     assert any("CTCP FPT (VND)" in m.value for m in at.markdown)
     assert any(m.label == "P/E" and m.value == "8.6" for m in at.metric)
     assert any("VNDirect" in c.value for c in at.caption)
