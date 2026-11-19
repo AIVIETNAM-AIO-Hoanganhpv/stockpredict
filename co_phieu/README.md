@@ -50,16 +50,13 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
 - **Nguồn giá**: Vietcap (giá đã điều chỉnh cổ tức). Công cụ bỏ qua mã có giá trị giao dịch thấp hơn `--gtgd` tỷ đồng mỗi phiên (mặc định 1 tỷ).
 - **Vùng mua đẹp** là nơi nhiều mức hỗ trợ trùng nhau (hợp lưu): Fibonacci hồi 0.5 / 0.618 / 0.705 (OTE) / 0.786,
   Order Block, FVG, MA20/MA50, đáy gần nhất.
-  - Giá đang nằm trong vùng: có thể mua ngay.
-  - Giá cao hơn vùng: đặt lệnh chờ ở giữa vùng, không mua đuổi.
-- **Cắt lỗ**: dưới vùng mua 0,5 ATR. **Chốt lời**: theo Fibonacci mở rộng ("hồi ít thì lên nhiều").
-  Các giá đều được làm tròn theo bước giá của sàn.
-- **Khuyến nghị**:
-  - **Mua**: xu hướng tăng mạnh, giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 2.
-  - **Mua**: giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 1,5.
-  - **Chờ về vùng mua**: xu hướng tăng nhưng giá đã chạy xa vùng mua.
-  - **Theo dõi**: đi ngang, hoặc tỷ lệ lãi/lỗ thấp.
+  Vùng này dùng để đặt **cắt lỗ** (dưới vùng 0,5 ATR), không còn chờ giá về vùng mới mua.
+- **Khuyến nghị** (theo bộ tham số đã kiểm định, xem mục "Kết quả kiểm định"):
+  - **Mua**: điểm động lượng ≥ 50 và khung tuần tăng. Mua phiên sau, chốt lời = 3 × rủi ro, giữ tối đa 60 phiên.
+  - **Gần đủ điều kiện**: điểm 35–50, hoặc đủ điểm nhưng khung tuần chưa tăng.
+  - **Theo dõi**: động lượng chưa đủ mạnh.
   - **Không mua**: xu hướng giảm.
+  Các giá đều được làm tròn theo bước giá của sàn.
 - **Tầm giữ**:
   - Ngắn hạn: khung ngày, giữ 1–3 tháng, có xét thêm khung tuần.
   - Trung hạn: khung tuần, giữ 3–9 tháng, có xét thêm khung tháng.
@@ -80,7 +77,7 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
 
   Kèm theo **vùng bán đẹp**: nơi hợp lưu kháng cự (Fibo mở rộng, đỉnh cũ, vùng cung).
 - **Phân ngành** (19 ngành ICB cấp 2): lọc theo ngành, bảng **sức mạnh ngành** (điểm TB, % mã tăng/giảm, hiệu suất 20 phiên).
-  Mã thuộc ngành Mạnh được +10 điểm khi xếp hạng mua, ngành Yếu bị −10 điểm và không được xếp "Mua mạnh".
+  Mã thuộc ngành Mạnh được +10 điểm khi xếp hạng, ngành Yếu bị −10 điểm (chỉ ảnh hưởng thứ tự xếp hạng).
 - **Timing – dự kiến ngày chốt lời**:
   - **Theo tốc độ**: đo các nhịp tăng trước của chính mã đó (mỗi phiên đi được bao nhiêu ATR), từ đó suy ra số phiên
     để đi từ giá mua tới chốt lời. Kết quả là khoảng **sớm – thường – muộn**.
@@ -114,7 +111,7 @@ py du_doan.py --doanh-nghiep FPT HPG     # hồ sơ, sức khỏe tài chính, x
 
   Điểm chỉ dùng các báo cáo **đã công bố** tính đến thời điểm chấm (theo ngày công bố), nên dùng được cho backtest.
 - **Ảnh hưởng tới khuyến nghị mua**: sức khỏe từ 4 trở lên được +10 điểm; từ 2 trở xuống bị −10 điểm;
-  doanh nghiệp đang lỗ bị −15 điểm. Hai trường hợp sau không được xếp "Mua mạnh".
+  doanh nghiệp đang lỗ bị −15 điểm. Các điểm này chỉ ảnh hưởng thứ tự xếp hạng.
 - **Hồ sơ mở rộng**: ban lãnh đạo, công ty con & liên kết (nguồn CafeF), lịch sử trả cổ tức (tiền mặt / cổ phiếu),
   sự kiện (ĐHCĐ, phát hành, niêm yết bổ sung), giao dịch nội bộ. **Công ty kiểm toán**: chưa có nguồn lấy tự động
   (TCBS chặn truy cập tự động).

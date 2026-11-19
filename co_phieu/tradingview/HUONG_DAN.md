@@ -14,14 +14,18 @@ Ngoài ra nó kết hợp thêm khung thời gian lớn hơn, rồi tự vào l�
 3. Bấm **Save**, sau đó bấm **Add to chart**.
 4. Mở tab **Strategy Tester** để xem tổng lãi/lỗ, tỉ lệ thắng, số lệnh, sụt giảm tối đa và danh sách từng lệnh.
 
-## Khi nào vào lệnh, khi nào thoát
-- **Mua** khi điểm tổng vượt lên trên +20 (từ Đi ngang/Giảm chuyển sang Tăng).
-- **Bán khống** khi điểm tổng xuống dưới -20. Một tín hiệu ngược chiều sẽ đóng lệnh cũ rồi mở lệnh mới.
-- **Chốt lời / cắt lỗ theo Fibonacci** như tài liệu: "hồi ít thì lên nhiều". Cắt lỗ đặt dưới đáy hồi (với lệnh mua).
-  Nếu không tính được mức Fibonacci hợp lý, công cụ dùng mức dự phòng: 2×ATR cho cắt lỗ, 3×ATR cho chốt lời.
-- Điểm tổng = điểm khung đang xem (trọng số 1) + điểm khung lớn hơn (trọng số 0,75).
-  Khung lớn được tự chọn: 15m→1H, 1H→4H, 4H→D, D→W, W→M. Khung lớn chỉ dùng nến **đã đóng**, nên
-  kết quả backtest không bị "nhìn trước tương lai".
+## Khi nào vào lệnh, khi nào thoát (tham số đã kiểm định – mặc định)
+- **Mua** khi đủ 3 điều kiện:
+  - điểm tổng = (2 × điểm khung chart + điểm khung lớn) / 3 **≥ 50**, tính theo bộ trọng số "Động lượng";
+  - điểm khung chart > 0;
+  - **khung lớn đang tăng**.
+- **Cắt lỗ** dưới đáy hồi gần nhất 0,5 ATR; nếu không có đáy hồi thì lấy giá − 1 ATR.
+- **Chốt lời = 3 × rủi ro.** **Giữ tối đa 60 nến** rồi tự đóng lệnh.
+- Bộ tham số này được chỉnh bằng backtest Python trên 891 mã giai đoạn 2006–2019. Khi kiểm tra trên 2020–2026, lãi trung bình
+  **+3,6%/lệnh**, trong khi mua ngẫu nhiên giữ 60 phiên được +2,3%.
+- Bản Pine chỉ **gần giống** bản Python: vùng hỗ trợ được thay bằng đáy hồi gần nhất. Vì vậy kết quả trên TradingView sẽ hơi khác.
+- Muốn dùng cách cũ: chọn bộ trọng số "Gốc", hạ ngưỡng về 20 và bật "Dùng Fibonacci thay cho 3R".
+- **Tín hiệu đỉnh** mặc định **chỉ vẽ nhãn**, không đóng lệnh, vì kiểm định 20 năm cho thấy nó không dự báo được giá giảm.
 
 ## Tín hiệu bán ở đỉnh
 Script đếm 9 dấu hiệu đỉnh:
@@ -49,10 +53,13 @@ chính là mốc Fibonacci thời gian 1.0. Tắt bằng mục "Vẽ ngày chố
 ## Các cài đặt (nút ⚙ cạnh tên strategy)
 | Cài đặt | Mặc định | Ghi chú |
 |---|---|---|
-| Ngưỡng điểm | 20 | Ngưỡng cao hơn thì ít lệnh hơn nhưng chắc hơn |
+| Bộ trọng số chỉ báo | Động lượng | Đã kiểm định; "Gốc" là cách cũ |
+| Ngưỡng điểm | 50 | Đã kiểm định |
+| Chỉ mua khi khung lớn tăng | bật | Đã kiểm định |
 | Chiều lệnh | Cả Mua và Bán | Cổ phiếu VN không bán khống được: nên chọn **Chỉ Mua** |
 | Khung lớn | tự chọn | Phải lớn hơn khung đang xem |
-| Cắt lỗ/chốt lời theo Fibonacci | bật | Tắt thì chỉ dùng mức theo ATR |
+| Dùng Fibonacci thay cho 3R | tắt | Mặc định chốt lời = 3 × rủi ro (đã kiểm định) |
+| Giữ tối đa | 60 nến | Đã kiểm định |
 | Thoát khi về Đi ngang | tắt | Bật để thoát sớm khi xu hướng yếu đi |
 | Backtest từ ngày | 01/01/2018 | |
 

@@ -10,7 +10,9 @@ strategy("Dự đoán xu hướng (Stoch MACD MFI ADX ICT SMC Fibo)", shorttitle
 
 // ───────────────────────────── Cài đặt ─────────────────────────────
 grpS = "Tín hiệu"
-nguong   = input.float(20.0, "Ngưỡng điểm (Tăng > +ngưỡng, Giảm < -ngưỡng)", minval=0, maxval=100, group=grpS)
+boTS     = input.string("Động lượng (đã kiểm định)", "Bộ trọng số chỉ báo", options=["Động lượng (đã kiểm định)", "Gốc"], group=grpS)
+nguong   = input.float(50.0, "Ngưỡng điểm vào lệnh (đã kiểm định: 50)", minval=0, maxval=100, group=grpS)
+canTuanTang = input.bool(true, "Chỉ mua khi khung lớn đang tăng (đã kiểm định)", group=grpS)
 huong    = input.string("Cả Mua và Bán", "Chiều lệnh", options=["Cả Mua và Bán", "Chỉ Mua", "Chỉ Bán"], group=grpS)
 dungHtf  = input.bool(true, "Kết hợp khung lớn hơn", group=grpS)
 htfNhap  = input.timeframe("", "Khung lớn (để trống = tự chọn)", group=grpS)
@@ -18,17 +20,17 @@ wHtf     = input.float(0.75, "Trọng số khung lớn (so với khung chart = 1
 kPivot   = input.int(3, "Số nến xác nhận đỉnh/đáy", minval=1, maxval=10, group=grpS)
 
 grpR = "Cắt lỗ / chốt lời"
-dungFibo = input.bool(true, "Cắt lỗ / chốt lời theo Fibonacci", group=grpR)
-atrSl    = input.float(2.0, "Cắt lỗ dự phòng (x ATR)", minval=0.5, step=0.5, group=grpR)
-atrTp    = input.float(3.0, "Chốt lời dự phòng (x ATR)", minval=0.5, step=0.5, group=grpR)
+dungFibo = input.bool(false, "Dùng Fibonacci thay cho 3R (chưa kiểm định)", group=grpR)
+heSoR    = input.float(3.0, "Chốt lời = k × rủi ro (đã kiểm định: 3)", minval=0.5, step=0.5, group=grpR)
+giuToiDa = input.int(60, "Giữ tối đa (nến) – đã kiểm định: 60", minval=1, group=grpR)
 thoatNgang = input.bool(false, "Thoát lệnh khi điểm về vùng Đi ngang", group=grpR)
 tuNgay   = input.time(timestamp(2018, 1, 1, 0, 0), "Backtest từ ngày", group=grpR)
 
 grpD = "Tín hiệu bán ở đỉnh"
 dungDinh     = input.bool(true, "Phát hiện đỉnh", group=grpD)
 nguongDinh   = input.int(3, "Số dấu hiệu tối thiểu (3 = cân bằng)", minval=2, maxval=6, group=grpD)
-thoatKhiDinh = input.bool(true, "Thoát lệnh Mua khi có tín hiệu đỉnh", group=grpD)
-banKhiDinh   = input.bool(true, "Mở lệnh Bán khi có tín hiệu đỉnh (nếu Chiều lệnh cho phép Bán)", group=grpD)
+thoatKhiDinh = input.bool(false, "Thoát lệnh Mua khi có tín hiệu đỉnh (kiểm định: không hiệu quả)", group=grpD)
+banKhiDinh   = input.bool(false, "Mở lệnh Bán khi có tín hiệu đỉnh (kiểm định: không hiệu quả)", group=grpD)
 
 grpH = "Hiển thị"
 hienBang = input.bool(true, "Hiện bảng điểm", group=grpH)
@@ -199,22 +201,28 @@ f_diem() =>
 
     tongW = 2.0 + 1.0 + 1.5 + 0.5 + 1.0 + wMf + wAdx + wSmc + wVung + wQuet + wIct
     tong = vSw * 2.0 + vMa * 1.0 + nz(vMacd) * 1.5 + vHa * 0.5 + nz(vSt) * 1.0 + nz(vMf) * wMf + vAdx * wAdx + vSmc * wSmc + vVung * wVung + vQuet * wQuet + vIct * wIct
-    diem = 100 * tong / tongW
+    // Bộ trọng số "Động lượng" (backtest 2006–2026: chỉnh trên 2006–2019, kiểm tra 2020–2026)
+    dlW = 1.0 + 2.5 + 1.0 + 1.5 + (wMf > 0 ? 1.5 : 0.0) + 1.5 + (wSmc > 0 ? 1.0 : 0.0)
+    dl = vSw * 1.0 + nz(vMacd) * 2.5 + vHa * 1.0 + nz(vSt) * 1.5 + (wMf > 0 ? nz(vMf) * 1.5 : 0.0) + vAdx * 1.5 + (wSmc > 0 ? vSmc : 0.0)
+    diem = boTS == "Gốc" ? 100 * tong / tongW : 100 * dl / dlW
     diem := adx < 20 ? diem * 0.7 : diem
-    [diem, vSw, vMa, nz(vMacd), vHa, nz(vSt), wMf > 0 ? nz(vMf) : na, vAdx, vSmc, vVung, vQuet, vIct, adx, h1, l1, h1Bar, l1Bar, dayTruocDinh, dinhTruocDay, a]
+    [diem, vSw, vMa, nz(vMacd), vHa, nz(vSt), wMf > 0 ? nz(vMf) : na, vAdx, vSmc, vVung, vQuet, vIct, adx, h1, l1, h1Bar, l1Bar, dayTruocDinh, dinhTruocDay, a, xuHuong]
 
 // Điểm khung lớn của nến ĐÃ ĐÓNG (không vẽ lại / không nhìn trước tương lai)
 f_diemTruoc() =>
-    [d, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19] = f_diem()
-    d[1]
+    [d, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, xhLon] = f_diem()
+    [d[1], xhLon[1]]
 
 // ───────────────────────────── Tính toán ─────────────────────────────
-[diemChart, vSw, vMa, vMacd, vHa, vSt, vMf, vAdx, vSmc, vVung, vQuet, vIct, adxV, h1, l1, h1Bar, l1Bar, dayTruocDinh, dinhTruocDay, atrV] = f_diem()
+[diemChart, vSw, vMa, vMacd, vHa, vSt, vMf, vAdx, vSmc, vVung, vQuet, vIct, adxV, h1, l1, h1Bar, l1Bar, dayTruocDinh, dinhTruocDay, atrV, xhChart] = f_diem()
 
 htf = htfNhap == "" ? f_htfTuDong() : htfNhap
-diemHtf = request.security(syminfo.tickerid, htf, f_diemTruoc(), lookahead=barmerge.lookahead_on)
-diem = dungHtf and not na(diemHtf) ? (diemChart + diemHtf * wHtf) / (1.0 + wHtf) : diemChart
-xh = diem > nguong ? 1 : diem < -nguong ? -1 : 0
+[diemHtf, xhHtf] = request.security(syminfo.tickerid, htf, f_diemTruoc(), lookahead=barmerge.lookahead_on)
+// Điểm tổng = (2 × khung chart + khung lớn) / 3 (đã kiểm định); dùng wHtf nếu chọn bộ "Gốc"
+diem = not dungHtf or na(diemHtf) ? diemChart : boTS == "Gốc" ? (diemChart + diemHtf * wHtf) / (1.0 + wHtf) : (2 * diemChart + diemHtf) / 3
+lonTang = not canTuanTang or (dungHtf and xhHtf == 1)
+lonGiam = not canTuanTang or (dungHtf and xhHtf == -1)
+xh = diem >= nguong and diemChart > 0 and lonTang ? 1 : diem <= -nguong and diemChart < 0 and lonGiam ? -1 : 0
 
 // Kế hoạch Fibonacci
 soNenSauDinh = na(h1Bar) ? 1 : math.max(1, math.min(4999, bar_index - h1Bar))
@@ -317,8 +325,10 @@ bool vaoBan = false
 if trongKy and tinHieuMua
     if choMua
         fiboOk = dungFibo and not na(tpMuaFibo) and tpMuaFibo > close and slMuaFibo < close
-        tpL := fiboOk ? tpMuaFibo : close + atrTp * atrV
-        slL := fiboOk ? slMuaFibo : close - atrSl * atrV
+        // Đã kiểm định: cắt lỗ dưới đáy hồi gần nhất 0,5 ATR (không có thì giá − 1 ATR), chốt lời = k × rủi ro
+        slR = not na(diem3Mua) and diem3Mua - 0.5 * atrV < close ? diem3Mua - 0.5 * atrV : close - atrV
+        tpL := fiboOk ? tpMuaFibo : close + heSoR * (close - slR)
+        slL := fiboOk ? slMuaFibo : slR
         strategy.entry("Mua", strategy.long, comment="Mua " + str.tostring(diem, "#"))
         strategy.exit("Thoát Mua", from_entry="Mua", limit=tpL, stop=slL)
         vaoMua := true
@@ -335,8 +345,9 @@ if trongKy and tinHieuMua
 if trongKy and tinHieuBan
     if choBan
         fiboOk = dungFibo and not na(tpBanFibo) and tpBanFibo < close and slBanFibo > close
-        tpS := fiboOk ? tpBanFibo : close - atrTp * atrV
-        slS := fiboOk ? slBanFibo : close + atrSl * atrV
+        slRB = not na(diem3Ban) and diem3Ban + 0.5 * atrV > close ? diem3Ban + 0.5 * atrV : close + atrV
+        tpS := fiboOk ? tpBanFibo : close - heSoR * (slRB - close)
+        slS := fiboOk ? slBanFibo : slRB
         strategy.entry("Bán", strategy.short, comment="Bán " + str.tostring(diem, "#"))
         strategy.exit("Thoát Bán", from_entry="Bán", limit=tpS, stop=slS)
         vaoBan := true
@@ -355,6 +366,13 @@ if trongKy and tinHieuDinh and not vaoMua and not vaoBan
         vaoBan := true
     else if strategy.position_size > 0 and thoatKhiDinh
         strategy.close("Mua", comment="Đỉnh (" + str.tostring(soDH) + " dấu hiệu)")
+
+// Giữ tối đa N nến (đã kiểm định: 60)
+soNenGiu = strategy.position_size != 0 ? bar_index - strategy.opentrades.entry_bar_index(strategy.opentrades - 1) : 0
+if strategy.position_size > 0 and soNenGiu >= giuToiDa
+    strategy.close("Mua", comment="Hết " + str.tostring(giuToiDa) + " nến")
+if strategy.position_size < 0 and soNenGiu >= giuToiDa
+    strategy.close("Bán", comment="Hết " + str.tostring(giuToiDa) + " nến")
 
 // Cập nhật lệnh thoát cho vị thế đang mở (bỏ qua phiên vừa đặt lệnh ngược chiều)
 if strategy.position_size > 0 and not vaoBan
