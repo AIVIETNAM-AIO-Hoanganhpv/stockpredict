@@ -97,7 +97,7 @@ def test_fibo_theo_tai_lieu():
     assert fibo.retracement_levels(200, 100, True)[0.5] == 150
 
 
-@pytest.mark.parametrize("ma,loai", [("USOIL", "fx"), ("BRENT", "fx"), ("FPT", "vn"), ("VNINDEX", "vn"), ("EURUSD", "fx"),
+@pytest.mark.parametrize("ma,loai", [("NT2", "vn"), ("PC1", "vn"), ("C69", "vn"), ("AMD", "intl"), ("USOIL", "fx"), ("BRENT", "fx"), ("FPT", "vn"), ("VNINDEX", "vn"), ("EURUSD", "fx"),
                                      ("XAUUSD", "fx"), ("AAPL", "intl"), ("us:IBM", "intl"),
                                      ("eur/usd", "fx"), ("vn:VNM", "vn")])
 def test_phan_loai(ma, loai):

@@ -48,9 +48,25 @@ def phan_loai(ma: str) -> tuple[str, str]:
         return "fx", up
     if len(up) == 6 and up[:3] in TIEN_TE and up[3:] in TIEN_TE:
         return "fx", up
-    if up in CHI_SO_VN or (len(up) == 3 and up.isalpha()):
+    if up in CHI_SO_VN or up in _ma_vn():                # mọi mã đang niêm yết (kể cả mã có số: NT2, PC1, C69…)
+        return "vn", up
+    if len(up) == 3 and up.isalpha() and not _ma_vn():  # chưa có danh sách mã → đoán theo 3 chữ cái
         return "vn", up
     return "intl", up
+
+
+_MA_VN: set | None = None
+
+
+def _ma_vn() -> set:
+    """Tập mã cổ phiếu VN đang niêm yết (từ du_lieu_ma/ma_vn.csv)."""
+    global _MA_VN
+    if _MA_VN is None:
+        try:
+            _MA_VN = set(pd.read_csv(FILE_MA, dtype=str)["ma"].str.upper())
+        except Exception:
+            _MA_VN = set()
+    return _MA_VN
 
 
 def doc_danh_sach(path) -> list[str]:
