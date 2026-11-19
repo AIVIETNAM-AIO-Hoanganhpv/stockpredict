@@ -41,7 +41,7 @@ def test_khuyen_nghi_xu_huong_tang_va_giam():
     down = quet.phan_tich_df("BBB", gia_vn(-0.3, seed=2))[1]
     for tam in ("D", "W"):
         kn = up[tam]
-        assert kn.muc in ("Mua mạnh", "Mua", "Chờ về vùng mua", "Theo dõi"), kn.ly_do
+        assert kn.muc in K.MUC and kn.muc != "Không mua", kn.ly_do
         if kn.gia_mua:
             assert kn.cat_lo < kn.gia_mua < kn.chot_loi1
             assert kn.gia_mua <= kn.gia + 1e-6
@@ -184,9 +184,7 @@ def test_mua_luon_co_rr_toi_thieu_sau_lam_tron():
         for tam in ("D", "W"):
             k = kn[tam]
             if k.muc == "Mua":
-                assert k.rr >= 1.5
-            if k.muc == "Mua mạnh":
-                assert k.rr >= 2
+                assert 2.5 <= k.rr <= 3.5                       # chốt lời = 3 × rủi ro (sau làm tròn)
             for p in (k.gia_mua, k.cat_lo, k.chot_loi1):
                 assert p is None or p % 100 == 0                # HNX: bước giá 100 đ
 

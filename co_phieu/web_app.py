@@ -483,10 +483,10 @@ with tab0:
         chon = None
         if xem == "🟢 Nên mua":
             b = loc(tinh_lai_bang(kho[tam], von))
-            muc = st.multiselect("Lọc khuyến nghị", K.MUC[::-1], default=["Mua mạnh", "Mua", "Chờ về vùng mua"])
+            muc = st.multiselect("Lọc khuyến nghị", K.MUC[::-1], default=["Mua", "Gần đủ điều kiện"])
             b = b[b["Khuyến nghị"].isin(muc)] if not b.empty else b
             dem = b["Khuyến nghị"].value_counts() if not b.empty else {}
-            for col, m in zip(st.columns(3), ["Mua mạnh", "Mua", "Chờ về vùng mua"]):
+            for col, m in zip(st.columns(3), ["Mua", "Gần đủ điều kiện", "Theo dõi"]):
                 col.metric(m, int(dem.get(m, 0)))
             if not b.empty:
                 cot = [c for c in ["Mã", "Ngành", "Khuyến nghị", "Giá", "Vùng mua", "Giá mua", "Cắt lỗ", "Chốt lời",
@@ -512,6 +512,8 @@ with tab0:
             for col, m in zip(st.columns(3), ["Bán mạnh", "Chốt lời dần", "Theo dõi đỉnh"]):
                 col.metric(m, int(dem.get(m, 0)))
             st.caption("Cổ phiếu VN không bán khống được: đây là gợi ý CHỐT LỜI / thoát hàng cho mã đang nắm giữ.")
+            st.warning("Kiểm định 20 năm (891 mã): tín hiệu đỉnh KHÔNG dự báo được giá giảm một cách ổn định – "
+                       "chỉ dùng để tham khảo, không nên bán chỉ vì tín hiệu này.")
             if b.empty:
                 st.info("Hiện chưa có mã nào ở vùng đỉnh theo bộ lọc này.")
             else:
@@ -658,7 +660,7 @@ with tab_ngay:
                 a = c1.selectbox("Ngày", ngay_co, index=0, key="ss_a")
                 bb = c2.selectbox("So với", ngay_co, index=1, key="ss_b")
                 ss = LS.so_sanh(LS.doc_ngay(a, BAO_CAO / "lich_su"), LS.doc_ngay(bb, BAO_CAO / "lich_su"), tam)
-                for ten, k in (("Mua / Mua mạnh", "mua"), ("Chờ về vùng mua", "cho"), ("Bán ở đỉnh", "ban")):
+                for ten, k in (("Mua", "mua"), ("Gần đủ điều kiện", "cho"), ("Bán ở đỉnh", "ban")):
                     x = ss[k]
                     st.markdown(f"##### {ten}")
                     st.markdown("🟢 **Mới vào:** " + (", ".join(f"`{r['Mã']}`" for r in x["moi_vao"]) or "–")

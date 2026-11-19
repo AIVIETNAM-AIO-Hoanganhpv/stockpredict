@@ -55,7 +55,7 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
 - **Cắt lỗ**: dưới vùng mua 0,5 ATR. **Chốt lời**: theo Fibonacci mở rộng ("hồi ít thì lên nhiều").
   Các giá đều được làm tròn theo bước giá của sàn.
 - **Khuyến nghị**:
-  - **Mua mạnh**: xu hướng tăng mạnh, giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 2.
+  - **Mua**: xu hướng tăng mạnh, giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 2.
   - **Mua**: giá trong vùng mua, lãi/lỗ kỳ vọng ≥ 1,5.
   - **Chờ về vùng mua**: xu hướng tăng nhưng giá đã chạy xa vùng mua.
   - **Theo dõi**: đi ngang, hoặc tỷ lệ lãi/lỗ thấp.
@@ -134,23 +134,34 @@ py du_doan.py --doanh-nghiep FPT HPG     # hồ sơ, sức khỏe tài chính, x
   Đây chỉ là gợi ý, có thể sai.
 - **Tab Danh mục**: hiện tin mới của các mã đang giữ và cảnh báo khi có tin tiêu cực.
 
-## Kết quả kiểm định trên dữ liệu quá khứ (19/11/2026)
-Lệnh chạy: `py du_doan.py --kiem-dinh` (10–20 phút). Kết quả đầy đủ ở `bao_cao/kiem_dinh.md`.
-- **Phạm vi:** 267 mã đủ thanh khoản, khoảng 2 năm, 26.529 điểm thời gian.
-- **Cách đo:** tại mỗi điểm chỉ dùng dữ liệu đến hôm đó. Lệnh mua giả lập đã trừ phí và thuế.
+## Kết quả kiểm định & tham số đang dùng (cập nhật 19/11/2026)
+**Backtest 20 năm**: 1.517 mã đang niêm yết, bỏ mã đã hủy niêm yết. Chỉ xét những thời điểm mã đủ thanh khoản
+(GTGD ≥ 1 tỷ/phiên **tại lúc đó**). Kết quả: 891 mã, 82.870 điểm tín hiệu, 04/2006 – 11/2026.
+- **Chỉnh tham số** trên giai đoạn 2006–2019, thử 1.200 bộ tham số.
+- **Kiểm tra** trên giai đoạn 2020–2026, là dữ liệu không dùng để chỉnh.
+- Lãi đã trừ phí mua/bán 0,15% và thuế 0,1%.
 
-| | Kết quả |
-|---|---|
-| Mốc so sánh: mua bất kỳ, giữ 60 phiên | lãi 44% số lần, TB **+2,1%** |
-| Tín hiệu **Mua** (764 lệnh) | thắng 28%, TB **−0,7%**/lệnh, 70% lệnh chạm cắt lỗ |
-| Tín hiệu **Mua mạnh** (92 lệnh) | thắng 24%, TB **−2,4%**/lệnh |
-| Lệnh chờ ở vùng mua (2.745 lệnh khớp) | thắng 25%, TB 0% |
-| **Bán ở đỉnh** (2.946 lần) | đúng 50% (giá thấp hơn sau 20 phiên), giá còn tăng TB +1,8% |
-| Mua + sức khỏe tài chính ≥ 4★ & đang lãi (188 lệnh) | thắng 34%, TB 0% (các nhóm khác: thắng 26–27%, TB −0,9 đến −1,2%) |
+| Mỗi lệnh (trung bình) | 2006–2019 (chỉnh) | **2020–2026 (kiểm tra)** |
+|---|---:|---:|
+| Mua ngẫu nhiên, giữ 60 phiên | −1,7% | +2,3% |
+| Tham số cũ | −0,4% | −0,1% |
+| **Tham số mới (đang dùng)** | **+1,6%** | **+3,6%** (2.245 lệnh, thắng 44%, giữ TB 42 phiên) |
 
-**Kết luận thẳng thắn:** ở cấu hình hiện tại, tín hiệu Mua và Bán ở đỉnh **chưa tốt hơn mua/bán ngẫu nhiên**.
-Lý do chính là cắt lỗ quá gần (0,5 ATR dưới vùng mua): 70% số lệnh bị cắt lỗ sau khoảng 17 phiên.
-Cần chỉnh lại tham số và kiểm định lại trước khi dùng các khuyến nghị để giao dịch thật.
+Quy tắc **Mua** hiện tại (`dudoan/khuyen_nghi.py`):
+- Điểm tính theo trọng số "động lượng": MACD 2,5; Stoch 1,5; MFI 1,5; ADX 1,5; Heikin Ashi 1; Đỉnh/đáy 1; SMC 1.
+- Điểm tổng = (2 × điểm khung ngày + điểm khung tuần) / 3, phải **≥ 50**, và **khung tuần đang tăng**.
+- **Mua ngay phiên sau**, không chờ giá về vùng mua.
+- **Cắt lỗ** dưới vùng hỗ trợ 0,5 ATR (không có vùng hỗ trợ thì lấy giá − 1 ATR). **Chốt lời = 3 × rủi ro**.
+  **Giữ tối đa 60 phiên.**
+- Mức "Gần đủ điều kiện": điểm 35–50, hoặc đủ điểm nhưng khung tuần chưa tăng.
+- Sức khỏe tài chính và ngành mạnh/yếu **chỉ ảnh hưởng thứ tự xếp hạng**, vì lọc theo hai yếu tố này không cải thiện kết quả.
+- Khung tuần (trung hạn) dùng cùng quy tắc nhưng **chưa được kiểm định riêng**.
+
+**Tín hiệu bán ở đỉnh**: không dấu hiệu nào dự báo giá giảm ổn định qua cả hai giai đoạn. Ví dụ: có từ 4 dấu hiệu,
+giá 20 phiên sau giảm 53% số lần ở giai đoạn 2006–2019, nhưng chỉ 50% ở giai đoạn 2020–2026. Công cụ chỉ giữ tín hiệu
+này làm **cảnh báo tham khảo**.
+
+> Kết quả quá khứ không đảm bảo tương lai. Công cụ chỉ hỗ trợ phân tích, không phải lời khuyên đầu tư.
 
 ## Web app trên điện thoại
 `web_app.py` là web app có 4 tab:

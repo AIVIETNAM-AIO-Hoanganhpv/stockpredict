@@ -55,9 +55,9 @@ def test_tom_tat_va_dieu_chinh_khuyen_nghi():
     from dudoan.khuyen_nghi import KhuyenNghi
     t = C.tom_tat_co_ban("FPT", pd.DataFrame({"close": [50_000.0]}, index=[pd.Timestamp("2026-11-18")]))
     assert t["Sức khỏe"] is not None and t["CTCK"] == "MUA" and t["Đang lỗ"] is False
-    kn = KhuyenNghi("FPT", "D", "Mua mạnh", 50_000, 50)
+    kn = KhuyenNghi("FPT", "D", "Mua", 50_000, 50)
     C.dieu_chinh_khuyen_nghi(kn, {"Đang lỗ": True})
-    assert kn.muc == "Mua" and kn.diem == 35
+    assert kn.muc == "Mua" and kn.diem == 35                   # chỉ đổi điểm xếp hạng, không đổi mức
     kn2 = KhuyenNghi("FPT", "D", "Mua", 50_000, 50)
     C.dieu_chinh_khuyen_nghi(kn2, {"Sức khỏe": 4.5, "Đang lỗ": False})
     assert kn2.diem == 60

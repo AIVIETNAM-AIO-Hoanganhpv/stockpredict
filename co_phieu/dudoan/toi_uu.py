@@ -156,14 +156,14 @@ def trich_xuat(ds_ma, so_tien_trinh=4, tien_trinh=None, thu_muc=None, so_nen=130
 # ------------------------------------------------------------------------- B2: mô phỏng
 @dataclass(frozen=True)
 class ThamSo:
-    trong_so: str = "goc"          # bộ trọng số chỉ báo: goc / xu_huong / dong_luong / smc
-    nguong: float = 20.0           # điểm tối thiểu để vào lệnh
-    loc_tuan: str = "khong"        # khong / diem_duong / tang
+    trong_so: str = "dong_luong"   # bộ trọng số chỉ báo: goc / xu_huong / dong_luong / smc
+    nguong: float = 50.0           # điểm tối thiểu để vào lệnh
+    loc_tuan: str = "tang"         # khong / diem_duong / tang
     loc_sk: float = 0.0            # sức khỏe tài chính tối thiểu (0 = không lọc); luôn bỏ DN lỗ nếu > 0
-    vao: str = "vung"              # vung: cần giá trong vùng mua · ngay: mua ngay khi đủ điểm
+    vao: str = "ngay"              # vung: cần giá trong vùng mua · ngay: mua ngay khi đủ điểm
     stoch_max: float = 100.0       # bỏ qua khi Stoch ≥ ngưỡng (quá mua)
     sl: str = "vung_0.5"           # vung_k: dưới vùng mua k ATR · day_k: dưới đáy gần nhất k ATR · atr_k: giá − k ATR
-    tp: str = "fibo"               # fibo / r_k (k lần rủi ro) / khong (chỉ thoát theo thời gian/trailing)
+    tp: str = "r_3"                # fibo / r_k (k lần rủi ro) / khong (chỉ thoát theo thời gian/trailing)
     trailing: float = 0.0          # dời cắt lỗ theo giá cao nhất − k ATR (0 = không)
     giu: int = 60                  # số phiên giữ tối đa
     thoat_dinh: int = 0            # thoát khi có ≥ N dấu hiệu đỉnh (0 = không)
@@ -173,8 +173,7 @@ BO_TRONG_SO = {
     "goc": None,
     "xu_huong": {"Đỉnh/đáy": 3, "Vị thế giá/MA20": 2, "MACD": 2, "ADX": 1.5, "SMC cấu trúc": 2.5,
                  "Stochastic": 0.5, "MFI": 0.5, "Heikin Ashi": 0.5},
-    "dong_luong": {"MACD": 2.5, "Stochastic": 1.5, "MFI": 1.5, "Heikin Ashi": 1, "ADX": 1.5,
-                   "Đỉnh/đáy": 1, "SMC cấu trúc": 1},
+    "dong_luong": K.TRONG_SO,
     "smc": {"SMC cấu trúc": 3, "SMC vùng OB/FVG": 2, "Quét thanh khoản": 1.5, "ICT OTE": 1.5,
             "ICT Premium/Discount": 1, "Đỉnh/đáy": 1.5},
 }

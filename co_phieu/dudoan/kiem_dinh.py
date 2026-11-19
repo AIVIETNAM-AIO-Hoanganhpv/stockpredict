@@ -2,9 +2,8 @@
 
 Tại mỗi điểm thời gian i (cách nhau `buoc` phiên), công cụ CHỈ được thấy dữ liệu đến hết phiên i,
 rồi so tín hiệu với diễn biến giá sau đó:
-  • Mua / Mua mạnh: mua giá mở cửa phiên i+1, thoát khi chạm cắt lỗ (ưu tiên nếu cùng phiên chạm cả hai),
+  • Mua: mua giá mở cửa phiên i+1, thoát khi chạm cắt lỗ (ưu tiên nếu cùng phiên chạm cả hai),
     chạm chốt lời, hoặc hết `giu` phiên. Lãi đã trừ phí mua 0,15%, phí bán 0,15%, thuế 0,1%.
-  • Chờ về vùng mua: đặt lệnh chờ ở giá mua đề xuất trong 20 phiên; khớp thì xử lý như trên.
   • Bán ở đỉnh (Chốt lời dần / Bán mạnh): "đúng" nếu giá 20 phiên sau thấp hơn giá lúc báo.
   • Mốc so sánh: mua bất kỳ lúc nào (cùng các điểm thời gian) và giữ 20 / 60 phiên.
 Lưu ý: chỉ dùng các mã đang niêm yết & đủ thanh khoản hôm nay (thiên lệch sống sót).
@@ -59,7 +58,7 @@ def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, g
         r20, r60 = c[i + 20] / c[i] - 1, c[i + 60] / c[i] - 1
         out["goc"].append((r20, r60, c[i + 60] * CHI_PHI[1] / (o[i + 1] * CHI_PHI[0]) - 1, sk))
         k = kn["D"]
-        if k.muc in ("Mua", "Mua mạnh") and k.cat_lo and k.chot_loi1:
+        if k.muc == "Mua" and k.cat_lo and k.chot_loi1:
             vao = o[i + 1]
             if k.cat_lo < vao < k.chot_loi1:
                 lai, kqua, ngay = _giao_dich(o, h, l, c, i + 1, vao, k.cat_lo, k.chot_loi1, i + giu)
@@ -67,7 +66,7 @@ def kiem_dinh_ma(ma: str, df: pd.DataFrame, buoc: int = 5, so_diem: int = 100, g
                 tg = k.thoi_gian
                 if tg is not None and tg.thuong is not None:
                     out["timing"].append((tg.som, tg.thuong, tg.muon, tg.fibo, ngay + 1, kqua))
-        elif k.muc == "Chờ về vùng mua" and k.gia_mua and k.cat_lo and k.chot_loi1:
+        elif False:                    # (bỏ "chờ về vùng mua" – không hiệu quả trong backtest)
             for j in range(i + 1, min(i + 21, n - 1)):
                 if l[j] <= k.gia_mua:
                     vao = min(o[j], k.gia_mua)
@@ -133,8 +132,6 @@ def tong_hop(ket_qua: list[dict]) -> dict:
                 "mua_giu_60_tb": float(goc[:, 2].mean()), "ti_le_lai_giu_60": float((goc[:, 2] > 0).mean())}
         if len(goc) else {},
         "mua": _tom_tat_lenh(mua),
-        "mua_manh": _tom_tat_lenh([x for x in mua if x[0] == "Mua mạnh"]),
-        "mua_thuong": _tom_tat_lenh([x for x in mua if x[0] == "Mua"]),
         "cho": _tom_tat_lenh([x for r in ket_qua for x in r["cho"]]),
         "khong_mua": {"so": int(len(km)), "r20_tb": float(km.mean()) if len(km) else None,
                       "ti_le_tang_20": float((km > 0).mean()) if len(km) else None},
@@ -222,8 +219,7 @@ def markdown(t: dict, luc: str) -> str:
             "", "## Tín hiệu MUA (ngắn hạn, khung ngày)",
             "| Loại | Số lệnh | Tỉ lệ thắng | Lãi TB/lệnh | Trung vị | Chạm chốt lời | Chạm cắt lỗ | Hết 60 phiên | Giữ TB |",
             "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
-    for ten, k in (("Mua mạnh", "mua_manh"), ("Mua", "mua_thuong"), ("Tất cả Mua", "mua"),
-                   ("Chờ về vùng mua (lệnh chờ khớp)", "cho")):
+    for ten, k in (("Mua", "mua"),):
         x = t[k]
         if x["so_lenh"]:
             dong.append(f"| {ten} | {x['so_lenh']} | {_pp(x['ti_le_thang'])} | {_p(x['lai_tb'])} | "

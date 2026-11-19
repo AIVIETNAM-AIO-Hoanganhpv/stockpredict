@@ -8,7 +8,7 @@ from dudoan import lich_su as LS  # noqa: E402
 
 def du_lieu_quet(ds_mua, ds_ban):
     return {"luc": "19/11/2026 15:30", "thong_ke": {},
-            "D": [{"Mã": m, "Hạng": h, "Khuyến nghị": "Mua" if h == 3 else "Chờ về vùng mua", "Giá": 100.0,
+            "D": [{"Mã": m, "Hạng": h, "Khuyến nghị": "Mua" if h == 3 else "Gần đủ điều kiện", "Giá": 100.0,
                    "Giá mua": 95.0, "Cắt lỗ": 90.0, "Chốt lời": 110.0, "Dự kiến chốt lời": "10/12/2099"}
                   for m, h in ds_mua] + [{"Mã": "ZZZ", "Hạng": 0}],
             "W": [], "ban_D": [{"Mã": m, "Hạng": 2, "Tín hiệu": "Chốt lời dần", "Giá": 100.0} for m in ds_ban],

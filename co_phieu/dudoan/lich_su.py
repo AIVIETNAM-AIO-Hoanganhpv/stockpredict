@@ -110,7 +110,7 @@ def hieu_qua_ban(rows: list, ngay: str, lay_gia) -> pd.DataFrame:
 
 # ------------------------------------------------------------------------- so sánh
 def so_sanh(moi: dict, cu: dict, tam: str = "D") -> dict:
-    """Mã mới vào / bị loại khỏi danh sách Mua (Mua mạnh + Mua) và Bán ở đỉnh (Chốt lời dần + Bán mạnh)."""
+    """Mã mới vào / bị loại khỏi danh sách Mua, Gần đủ điều kiện và Bán ở đỉnh (Chốt lời dần + Bán mạnh)."""
     def tap(ds, hang_min):
         return {r["Mã"]: r for r in ds if (r.get("Hạng") or 0) >= hang_min}
     out = {}

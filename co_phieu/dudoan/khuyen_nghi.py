@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from . import chi_bao, fibo
+from . import chi_bao
 from .phan_tich import KetQua, KetQuaKhung
 
 # Phí giao dịch mặc định (chứng khoán VN): mua 0,15%; bán 0,15% + thuế 0,1%
@@ -18,8 +18,8 @@ PHI_MUA = 0.0015
 PHI_BAN = 0.0015
 THUE_BAN = 0.001
 
-MUC = ["Không mua", "Theo dõi", "Chờ về vùng mua", "Mua", "Mua mạnh"]   # hạng 0..4
-MAU_MUC = {"Mua mạnh": "#15803d", "Mua": "#16a34a", "Chờ về vùng mua": "#d97706",
+MUC = ["Không mua", "Theo dõi", "Gần đủ điều kiện", "Mua"]   # hạng 0..3
+MAU_MUC = {"Mua": "#15803d", "Gần đủ điều kiện": "#d97706",
            "Theo dõi": "#64748b", "Không mua": "#dc2626"}
 KHUNG_LON = {"D": "W", "W": "M", "4H": "D", "1H": "4H"}
 
@@ -169,8 +169,38 @@ def tim_vung_mua(df: pd.DataFrame, kqk: KetQuaKhung) -> VungMua | None:
 
 
 # ------------------------------------------------------------------------- khuyến nghị
+# Tham số đã kiểm định (backtest 2006–2026, 891 mã, chỉnh trên 2006–2019, kiểm tra trên 2020–2026):
+#   trọng số "động lượng", điểm ≥ 50 và khung lớn đang tăng, mua ngay phiên sau, cắt lỗ dưới vùng hỗ trợ 0,5 ATR
+#   (không có vùng: giá − 1 ATR), chốt lời = 3 × rủi ro, giữ tối đa 60 phiên.
+#   Kiểm tra 2020–2026: 2.245 lệnh, lãi TB +3,6%/lệnh (mua ngẫu nhiên giữ 60 phiên: +2,3%), thắng 44%.
+TRONG_SO = {"MACD": 2.5, "Stochastic": 1.5, "MFI": 1.5, "Heikin Ashi": 1, "ADX": 1.5,
+            "Đỉnh/đáy": 1, "SMC cấu trúc": 1}
+NGUONG_MUA = 50.0
+NGUONG_GAN = 35.0
+SL_ATR = 0.5
+TP_R = 3.0
+GIU_TOI_DA = 60
+
+
+def diem_trong_so(kqk: KetQuaKhung, df: pd.DataFrame | None = None, trong_so: dict | None = None) -> float:
+    """Điểm khung tính lại với bộ trọng số đã kiểm định (chỉ các chỉ báo có phiếu)."""
+    trong_so = TRONG_SO if trong_so is None else trong_so
+    tu = mau = 0.0
+    for v in kqk.votes:
+        w = trong_so.get(v.ten, 0.0) if v.trong_so > 0 else 0.0
+        tu += v.gia_tri * w
+        mau += w
+    d = 100 * tu / mau if mau else 0.0
+    if df is not None and len(df) > 30:
+        adx = float(chi_bao.adx(df)["adx"].iloc[-1])
+        if adx < 20:
+            d *= 0.7
+    return d
+
+
 def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str | None = None, san: str | None = None) -> KhuyenNghi:
-    """Khuyến nghị MUA cho khung `tam` (D: ngắn hạn 1–3 tháng, W: trung hạn 3–9 tháng).
+    """Khuyến nghị MUA cho khung `tam` theo bộ tham số đã kiểm định (xem TRONG_SO, NGUONG_MUA…).
+    D: ngắn hạn (đã kiểm định) · W: trung hạn (cùng quy tắc, CHƯA kiểm định riêng).
     `loai`/`san` quyết định bước giá; để trống thì tự suy ra từ mã."""
     loai = loai_gia(kq.ma, loai or kq.loai, san)
     kqk = next((k for k in kq.khung if k.khung == tam), None)
@@ -181,63 +211,50 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str | None = None, san: str | 
     lon = next((k for k in kq.khung if k.khung == KHUNG_LON.get(tam)), None)
     gia = kqk.gia
     atr = float(chi_bao.atr(df).iloc[-1])
-    diem = (kqk.diem * 2 + (lon.diem if lon else kqk.diem)) / 3     # khung giữ lệnh + khung lớn
-    ly_do = [f"Điểm khung {tam}: {kqk.diem:+.0f}" + (f", khung {lon.khung}: {lon.diem:+.0f}" if lon else "")]
+    dd = diem_trong_so(kqk, df)
+    dw = diem_trong_so(lon, df) if lon and lon.votes else 0.0     # giống lúc kiểm định: phạt ADX theo khung giữ lệnh
+    diem = (2 * dd + dw) / 3
+    lon_tang = bool(lon and lon.xu_huong == 1)
+    ly_do = [f"Điểm động lượng khung {tam}: {dd:+.0f}" + (f", khung {lon.khung}: {dw:+.0f}" if lon else "")
+             + f" → tổng {diem:+.0f}"]
     kn = KhuyenNghi(kq.ma, tam, "Theo dõi", gia, round(diem, 1), ly_do=ly_do)
 
     vung = tim_vung_mua(df, kqk)
-    nhip = _nhip_tang(kqk)
     if vung:
         kn.vung = vung
-        trong_vung = gia <= vung.cao + 0.1 * atr
-        kn.gia_mua = gia if trong_vung else (vung.thap + vung.cao) / 2
-        kn.cat_lo = vung.thap - 0.5 * atr
-        if nhip and nhip[1] > nhip[0]:
-            p = fibo.plan(nhip[1], nhip[0], min(vung.thap, kn.gia_mua), True)
-            kn.chot_loi1, kn.chot_loi2 = p.tp1, p.tp2
-        if not kn.chot_loi1 or kn.chot_loi1 <= kn.gia_mua * 1.01:
-            kn.chot_loi1 = kn.gia_mua + 2 * (kn.gia_mua - kn.cat_lo)
-        ly_do.append("Vùng mua hợp lưu: " + ", ".join(vung.ly_do))
-    else:
-        trong_vung = False
-        ly_do.append("Không có vùng hỗ trợ rõ ràng gần giá.")
-
-    # Làm tròn theo bước giá TRƯỚC khi xét ngưỡng R:R (tránh "Mua" với R:R thực tế < 1,5)
+        ly_do.append("Vùng hỗ trợ: " + ", ".join(vung.ly_do))
+    # Kế hoạch theo tham số đã kiểm định: mua ngay, cắt lỗ dưới vùng hỗ trợ, chốt lời 3R
+    kn.gia_mua = gia
+    sl = (vung.thap - SL_ATR * atr) if vung and vung.thap - SL_ATR * atr < gia else gia - atr
+    kn.cat_lo = sl
+    kn.chot_loi1 = gia + TP_R * (gia - sl)
+    kn.chot_loi2 = None
     for f in ("gia_mua", "cat_lo"):
         setattr(kn, f, lam_tron(getattr(kn, f), loai, xuong=True))
-    for f in ("chot_loi1", "chot_loi2"):
-        setattr(kn, f, lam_tron(getattr(kn, f), loai, xuong=True))
+    kn.chot_loi1 = lam_tron(kn.chot_loi1, loai, xuong=False)
     if kn.vung:
-        kn.vung = VungMua(lam_tron(kn.vung.thap, loai), lam_tron(kn.vung.cao, loai, xuong=False),
-                          kn.vung.ly_do)
+        kn.vung = VungMua(lam_tron(kn.vung.thap, loai), lam_tron(kn.vung.cao, loai, xuong=False), kn.vung.ly_do)
 
-    stoch_k = float(chi_bao.stoch(df)["k"].iloc[-1])
-    rr = kn.rr
     if diem < -20 or kqk.xu_huong == -1:
         kn.muc = "Không mua"
-        ly_do.append("Xu hướng giảm – đứng ngoài, chờ tín hiệu đảo chiều (CHoCH tăng).")
-    elif diem <= 20:
-        kn.muc = "Theo dõi"
-        ly_do.append("Xu hướng chưa rõ (đi ngang).")
-    elif not vung:
-        kn.muc = "Theo dõi"
-    elif not trong_vung:
-        kn.muc = "Chờ về vùng mua"
-        ly_do.append(f"Giá đang cao hơn vùng mua {kn.cach_vung_pct:.1%} – đặt lệnh chờ, không mua đuổi.")
-    elif rr is not None and rr >= 2 and diem >= 40 and (not lon or lon.xu_huong != -1) and stoch_k < 85:
-        kn.muc = "Mua mạnh"
-        ly_do.append(f"Giá trong vùng mua, xu hướng mạnh, lãi/lỗ kỳ vọng {rr:.1f} lần.")
-    elif rr is not None and rr >= 1.5:
+        ly_do.append("Xu hướng giảm – đứng ngoài.")
+    elif diem >= NGUONG_MUA and dd > 0 and lon_tang:
         kn.muc = "Mua"
-        ly_do.append(f"Giá trong vùng mua, lãi/lỗ kỳ vọng {rr:.1f} lần.")
+        ly_do.append(f"Đủ điều kiện: điểm ≥ {NGUONG_MUA:.0f} và khung {lon.khung} đang tăng. Mua phiên sau, "
+                     f"cắt lỗ {kn.cat_lo:,.0f}, chốt lời {kn.chot_loi1:,.0f} (3 × rủi ro), giữ tối đa {GIU_TOI_DA} phiên.")
+    elif diem >= NGUONG_GAN and dd > 0:
+        kn.muc = "Gần đủ điều kiện"
+        thieu = []
+        if diem < NGUONG_MUA:
+            thieu.append(f"điểm {diem:.0f} < {NGUONG_MUA:.0f}")
+        if not lon_tang:
+            thieu.append(f"khung {lon.khung if lon else 'lớn'} chưa tăng")
+        ly_do.append("Còn thiếu: " + ", ".join(thieu) + ".")
     else:
         kn.muc = "Theo dõi"
-        ly_do.append("Giá trong vùng mua nhưng tỷ lệ lãi/lỗ chưa hấp dẫn (< 1,5).")
-    if stoch_k >= 85 and kn.muc in ("Mua", "Mua mạnh"):
-        kn.muc = "Chờ về vùng mua"
-        ly_do.append(f"Stoch quá mua ({stoch_k:.0f}) – chờ nhịp chỉnh.")
+        ly_do.append("Động lượng chưa đủ mạnh.")
 
-    if kn.gia_mua and kn.chot_loi1:
+    if kn.muc in ("Mua", "Gần đủ điều kiện") and kn.chot_loi1:
         try:
             kn.thoi_gian = du_kien_thoi_gian(df, kqk, kn.gia_mua, kn.chot_loi1)
         except Exception:

@@ -511,22 +511,18 @@ def tom_tat_co_ban(ma: str, df_gia: pd.DataFrame | None = None) -> dict:
 
 
 def dieu_chinh_khuyen_nghi(kn, co_ban: dict):
-    """Cộng/trừ điểm khuyến nghị mua theo cơ bản: sức khỏe ≥ 4 → +10; ≤ 2 → −10; đang lỗ → −15 và
-    không xếp 'Mua mạnh'."""
+    """Cộng/trừ điểm xếp hạng theo cơ bản: sức khỏe ≥ 4 → +10; ≤ 2 → −10; đang lỗ → −15.
+    Chỉ ảnh hưởng thứ tự xếp hạng, KHÔNG đổi mức khuyến nghị (lọc sức khỏe không cải thiện backtest 20 năm)."""
     sk = co_ban.get("Sức khỏe")
     if co_ban.get("Đang lỗ"):
         kn.diem = round(kn.diem - 15, 1)
-        kn.ly_do.append("Doanh nghiệp đang lỗ (−15 điểm).")
-        if kn.muc == "Mua mạnh":
-            kn.muc = "Mua"
+        kn.ly_do.append("Doanh nghiệp đang lỗ (−15 điểm, chỉ ảnh hưởng xếp hạng).")
     elif sk is not None and sk >= 4:
         kn.diem = round(kn.diem + 10, 1)
         kn.ly_do.append(f"Sức khỏe tài chính tốt {sk}/5 (+10 điểm).")
     elif sk is not None and sk <= 2:
         kn.diem = round(kn.diem - 10, 1)
         kn.ly_do.append(f"Sức khỏe tài chính yếu {sk}/5 (−10 điểm).")
-        if kn.muc == "Mua mạnh":
-            kn.muc = "Mua"
     return kn
 
 

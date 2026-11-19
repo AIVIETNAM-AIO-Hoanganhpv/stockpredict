@@ -27,7 +27,9 @@ KHUNG = {
 }
 
 # Hàng hoá trên Yahoo (giá vàng/bạc giao ngay không ổn định → dùng hợp đồng tương lai)
-YAHOO_DAC_BIET = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
+YAHOO_DAC_BIET = {"XAUUSD": "GC=F", "XAGUSD": "SI=F",
+                  # dầu thô (hợp đồng tương lai): WTI và Brent – gõ tên nào cũng được
+                  "USOIL": "CL=F", "WTI": "CL=F", "XTIUSD": "CL=F", "UKOIL": "BZ=F", "BRENT": "BZ=F", "XBRUSD": "BZ=F"}
 
 
 def phan_loai(ma: str) -> tuple[str, str]:
@@ -42,6 +44,8 @@ def phan_loai(ma: str) -> tuple[str, str]:
         pre = pre.lower()
         return ({"vn": "vn", "fx": "fx"}.get(pre, "intl"), rest.strip().upper())
     up = ma.upper().replace("/", "")
+    if up in YAHOO_DAC_BIET:                       # vàng, bạc, dầu → như forex (có khung 4H/1H/15m)
+        return "fx", up
     if len(up) == 6 and up[:3] in TIEN_TE and up[3:] in TIEN_TE:
         return "fx", up
     if up in CHI_SO_VN or (len(up) == 3 and up.isalpha()):

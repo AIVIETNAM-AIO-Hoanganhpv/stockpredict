@@ -97,7 +97,7 @@ def test_fibo_theo_tai_lieu():
     assert fibo.retracement_levels(200, 100, True)[0.5] == 150
 
 
-@pytest.mark.parametrize("ma,loai", [("FPT", "vn"), ("VNINDEX", "vn"), ("EURUSD", "fx"),
+@pytest.mark.parametrize("ma,loai", [("USOIL", "fx"), ("BRENT", "fx"), ("FPT", "vn"), ("VNINDEX", "vn"), ("EURUSD", "fx"),
                                      ("XAUUSD", "fx"), ("AAPL", "intl"), ("us:IBM", "intl"),
                                      ("eur/usd", "fx"), ("vn:VNM", "vn")])
 def test_phan_loai(ma, loai):
@@ -107,6 +107,7 @@ def test_phan_loai(ma, loai):
 def test_yahoo_symbol():
     assert du_lieu.yahoo_symbol("fx", "EURUSD") == "EURUSD=X"
     assert du_lieu.yahoo_symbol("fx", "XAUUSD") == "GC=F"
+    assert du_lieu.yahoo_symbol("fx", "USOIL") == "CL=F" and du_lieu.yahoo_symbol("fx", "BRENT") == "BZ=F"
     assert du_lieu.yahoo_symbol("vn", "FPT") == "FPT.VN"
     assert du_lieu.yahoo_symbol("vn", "VN30") == "E1VFVN30.VN"
 

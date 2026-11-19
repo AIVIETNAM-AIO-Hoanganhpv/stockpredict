@@ -131,7 +131,7 @@ def suc_manh_nganh(ket_qua: list[KetQuaMa], tam: str = "D") -> pd.DataFrame:
 
 
 def ap_dung_nganh(ket_qua: list[KetQuaMa]):
-    """Ưu tiên mã thuộc ngành mạnh: +10 điểm (ngành yếu −10). Ngành yếu: hạ 'Mua mạnh' xuống 'Mua'."""
+    """Ưu tiên mã thuộc ngành mạnh khi xếp hạng: +10 điểm (ngành yếu −10). Không đổi mức khuyến nghị."""
     for tam in ("D", "W"):
         sm = suc_manh_nganh(ket_qua, tam)
         if sm.empty:
@@ -149,9 +149,6 @@ def ap_dung_nganh(ket_qua: list[KetQuaMa]):
             elif xl == "Yếu":
                 kn.diem = round(kn.diem - 10, 1)
                 kn.ly_do.append(f"Ngành {r.nganh} đang yếu (−10 điểm).")
-                if kn.muc == "Mua mạnh":
-                    kn.muc = "Mua"
-                    kn.ly_do.append("Hạ từ 'Mua mạnh' xuống 'Mua' vì ngành yếu.")
 
 
 def _so(x, nd=2):
@@ -159,7 +156,7 @@ def _so(x, nd=2):
 
 
 def bang(ket_qua: list[KetQuaMa], tam: str = "D", von: float = 100e6) -> pd.DataFrame:
-    """Bảng xếp hạng: Mua mạnh → Mua → Chờ về vùng mua → Theo dõi → Không mua; trong cùng mức xếp theo R:R."""
+    """Bảng xếp hạng: Mua → Gần đủ điều kiện → Theo dõi → Không mua; trong cùng mức xếp theo R:R."""
     rows = []
     for r in ket_qua:
         if not r.kn:
@@ -174,7 +171,7 @@ def bang(ket_qua: list[KetQuaMa], tam: str = "D", von: float = 100e6) -> pd.Data
             "Giá": kn.gia, "% phiên": _so(r.thay_doi * 100, 1),
             "Vùng mua": f"{kn.vung.thap:,.0f} – {kn.vung.cao:,.0f}" if kn.vung else "",
             "Giá mua": kn.gia_mua, "Cắt lỗ": kn.cat_lo, "Chốt lời": kn.chot_loi1, "Chốt lời 2": kn.chot_loi2,
-            "R:R": _so(kn.rr, 2),
+            "R:R": _so(kn.rr, 2), "Giữ tối đa (phiên)": K.GIU_TOI_DA if kn.muc == "Mua" else None,
             "% lãi": _so(lai["tp1"]["pct"] * 100, 1) if lai.get("tp1") else None,
             "% lỗ": _so(lai["sl"]["pct"] * 100, 1) if lai.get("sl") else None,
             "Tiền lãi": _so(lai["tp1"]["lai"], 0) if lai.get("tp1") else None,
