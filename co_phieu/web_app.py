@@ -4,6 +4,7 @@ Chạy trên máy:      py -m streamlit run web_app.py   (hoặc bấm run_web.b
 Đưa lên mạng:       Streamlit Community Cloud, file chính co_phieu/web_app.py
 """
 import json
+import math
 import os
 import sys
 import time
@@ -16,7 +17,7 @@ import streamlit.components.v1 as components
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, co_ban as CB, du_lieu, greenview as G, mo_hinh as MH, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
+from dudoan import bao_cao, co_ban as CB, du_lieu, forex as FX, greenview as G, mo_hinh as MH, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -543,6 +544,12 @@ with st.expander("⚙ Cài đặt chung", expanded=False):
     tam_nhan = st.radio("Tầm nắm giữ", list(TAM), horizontal=True)
     von = st.number_input("Số vốn cho mỗi lệnh (đồng)", min_value=1_000_000, value=100_000_000,
                           step=10_000_000, format="%d")
+    st.markdown("**Forex / vàng / dầu / crypto** (tính lot theo % rủi ro như cBot)")
+    c1, c2, c3 = st.columns(3)
+    fx_von = c1.number_input("Tài khoản (USD)", min_value=100.0, value=10_000.0, step=500.0, key="fx_von")
+    fx_rr = c2.number_input("Rủi ro mỗi lệnh (%)", min_value=0.1, max_value=10.0, value=1.0, step=0.1, key="fx_rr")
+    fx_max = c3.number_input("Rủi ro tối đa ($, 0 = không giới hạn)", min_value=0.0, value=0.0, step=10.0,
+                             key="fx_max")
 tam = TAM[tam_nhan]
 
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
@@ -1061,6 +1068,58 @@ def the_xu_huong(kq):
     st.caption("Chỉ dự báo xu hướng; khuyến nghị mua kèm kiểm định chỉ áp dụng cho cổ phiếu Việt Nam.")
 
 
+def so_fx(x, ts):
+    """Hiện giá forex đủ số lẻ theo pip (EURUSD 5 số, USDJPY 3 số, vàng 2 số)."""
+    nd = max(0, int(round(-math.log10(ts.pip))) + 1) if ts.pip < 1 else 2
+    return f"{x:,.{nd}f}"
+
+
+def the_forex(kq):
+    """Forex / vàng / dầu / crypto: lệnh Buy hoặc Sell, pip, lot theo % rủi ro (công thức cBot)."""
+    try:
+        k = FX.ke_hoach_fx(kq, fx_von, fx_rr, fx_max)
+    except Exception as e:
+        st.warning(f"Chưa tính được kế hoạch forex: {str(e)[:150]}")
+        the_xu_huong(kq)
+        return
+    if not k.get("huong"):
+        st.markdown(f"<div style='padding:14px 16px;border-radius:14px;background:#64748b;color:white'>"
+                    f"<div style='font-size:14px;opacity:.9'>{kq.ma} · khung {k.get('khung', '')}</div>"
+                    f"<div style='font-size:28px;font-weight:800'>ĐỨNG NGOÀI – CHƯA RÕ HƯỚNG</div></div>",
+                    unsafe_allow_html=True)
+        st.markdown(k["ly_do"])
+        return
+    ts = k["thong_so"]
+    mua = k["huong"].startswith("MUA")
+    mau = "#15803d" if mua else "#dc2626"
+    kl = k["khoi_luong"]
+    don_vi = {"vang": "oz", "bac": "oz", "dau": "thùng", "crypto": "coin"}.get(ts.loai, "đơn vị")
+    st.markdown(
+        f"<div style='padding:14px 16px;border-radius:14px;background:{mau};color:white'>"
+        f"<div style='font-size:14px;opacity:.9'>{kq.ma} · khung {k['khung']} · giá {so_fx(k['gia'], ts)}</div>"
+        f"<div style='font-size:28px;font-weight:800'>{'▲' if mua else '▼'} {k['huong']}</div></div>"
+        f"<div style='border:2px solid {mau};border-radius:12px;padding:10px 12px;margin:6px 0'>"
+        f"<div style='padding:4px 0'><b>🟦 Vào lệnh: {so_fx(k['vao'], ts)}</b> · <b>{kl['lot']:.2f} lot</b> "
+        f"({kl['don_vi']:,.0f} {don_vi}) · 1 pip = {k['gia_tri_pip']:,.2f} USD</div>"
+        f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>🟥 Cắt lỗ: {so_fx(k['cat_lo'], ts)}</b> "
+        f"({k['sl_pip']:,.1f} pip) → <b style='color:#dc2626'>{k['lo_usd']:,.2f} USD</b> "
+        f"({k['lo_usd'] / fx_von:.2%} tài khoản)</div>"
+        f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>🟩 Chốt lời: {so_fx(k['chot_loi'], ts)}</b> "
+        f"({k['tp_pip']:,.1f} pip) → <b style='color:#15803d'>+{k['lai_usd']:,.2f} USD</b> "
+        f"({k['lai_usd'] / fx_von:+.2%}) · R:R 1:{k['rr']:g}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"**Cách tính lot (giống cBot):** tiền rủi ro = {fx_von:,.0f} × {fx_rr:g}% = **{kl['tien_rui_ro']:,.2f} USD**"
+        f"{f' (trần {fx_max:,.0f} USD)' if fx_max else ''}; lot = {kl['tien_rui_ro']:,.2f} ÷ ({kl['sl_pip']:,.1f} pip × "
+        f"{kl['gia_tri_pip_lot']:,.2f} USD/pip/lot) = {kl['lot_tho']:.4f} → làm tròn xuống **{kl['lot']:.2f} lot**. "
+        f"Rủi ro thực {kl['rui_ro_thuc']:,.2f} USD ({kl['rui_ro_thuc_pct']:.2%}).")
+    if kl["canh_bao"]:
+        st.warning(kl["canh_bao"])
+    st.markdown("**❓ Vì sao:** " + k["ly_do"])
+    st.caption("Forex khác cổ phiếu VN: có cả lệnh Bán (Sell), tính bằng pip/lot, không thuế bán, chi phí là spread/"
+               "swap (chưa trừ). 1 lot = 100.000 đơn vị tiền (vàng 100 oz, bạc 5.000 oz, dầu 1.000 thùng). "
+               "Giá trị pip là ước tính theo tỷ giá Yahoo – sàn của bạn có thể khác chút.")
+
+
 def la_co_phieu_vn(kq):
     return kq.khung and kq.loai == "vn" and kq.ma not in du_lieu.CHI_SO_VN and tam in kq.frames
 
@@ -1120,7 +1179,10 @@ def xem_ma(ma: str, noi: str):
         else:
             chi_tiet(kq, tl, noi + "_kt", dau=False)
     else:
-        the_xu_huong(kq)
+        if kq.loai == "fx":
+            the_forex(kq)
+        else:
+            the_xu_huong(kq)
         khung_dinh = "4H" if kq.loai == "fx" else tam
         if khung_dinh in kq.frames:
             with st.expander("Tín hiệu đỉnh"):

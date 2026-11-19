@@ -68,7 +68,7 @@
     if (e.target.matches('input,textarea,select') || document.querySelector('.sheet-bg')) return;
     const k = e.key.toLowerCase();
     if (e.altKey) {
-      const map = { t: 'trend', h: 'hline', v: 'vline', c: 'crossline', f: 'fibret', j: 'hray', p: 'parallel', r: 'rect' };
+      const map = { t: 'trend', h: 'hline', v: 'vline', c: 'crossline', f: 'fibret', j: 'hray', p: 'parallel' };   // Alt+R: đặt lại khung nhìn (extras.js)
       if (map[k]) { e.preventDefault(); App.draw.setTool(map[k]); }
       if (k === 'a') { e.preventDefault(); App.panels.alertSheet(); }
       if (k === 'i') { e.preventDefault(); App.ui.indSheet(); }
