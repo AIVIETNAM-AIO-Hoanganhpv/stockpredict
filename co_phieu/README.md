@@ -84,6 +84,23 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
 - **Tính lãi**: nhập số vốn → số cổ phiếu (lô 100), tiền và % lãi khi chạm chốt lời, tiền lỗ khi chạm cắt lỗ.
   Đã trừ phí mua 0,15%, phí bán 0,15% và thuế bán 0,1%.
 
+## Kết quả kiểm định trên dữ liệu quá khứ (19/11/2026)
+Lệnh chạy: `py du_doan.py --kiem-dinh` (10–20 phút). Kết quả đầy đủ ở `bao_cao/kiem_dinh.md`.
+- **Phạm vi:** 267 mã đủ thanh khoản, khoảng 2 năm, 26.529 điểm thời gian.
+- **Cách đo:** tại mỗi điểm chỉ dùng dữ liệu đến hôm đó. Lệnh mua giả lập đã trừ phí và thuế.
+
+| | Kết quả |
+|---|---|
+| Mốc so sánh: mua bất kỳ, giữ 60 phiên | lãi 44% số lần, TB **+2,1%** |
+| Tín hiệu **Mua** (764 lệnh) | thắng 28%, TB **−0,7%**/lệnh, 70% lệnh chạm cắt lỗ |
+| Tín hiệu **Mua mạnh** (92 lệnh) | thắng 24%, TB **−2,4%**/lệnh |
+| Lệnh chờ ở vùng mua (2.745 lệnh khớp) | thắng 25%, TB 0% |
+| **Bán ở đỉnh** (2.946 lần) | đúng 50% (giá thấp hơn sau 20 phiên), giá còn tăng TB +1,8% |
+
+**Kết luận thẳng thắn:** ở cấu hình hiện tại, tín hiệu Mua và Bán ở đỉnh **chưa tốt hơn mua/bán ngẫu nhiên**.
+Lý do chính là cắt lỗ quá gần (0,5 ATR dưới vùng mua): 70% số lệnh bị cắt lỗ sau khoảng 17 phiên.
+Cần chỉnh lại tham số và kiểm định lại trước khi dùng các khuyến nghị để giao dịch thật.
+
 ## Web app trên điện thoại
 `web_app.py` là web app có 4 tab:
 - **Khuyến nghị**: gồm 3 chế độ xem:

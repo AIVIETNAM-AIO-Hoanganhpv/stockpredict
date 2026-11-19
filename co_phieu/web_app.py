@@ -93,7 +93,8 @@ def chi_tiet(kq, tl, tab: str):
         fig = bao_cao.bieu_do(df, kk, kq.ma)
         fig.update_layout(height=760, margin=dict(l=8, r=8, t=36, b=8), showlegend=False,
                           dragmode="pan")
-        st.plotly_chart(fig, width="stretch", config={"scrollZoom": True, "displaylogo": False})
+        st.plotly_chart(fig, width="stretch", config={"scrollZoom": True, "displaylogo": False},
+                        key=f"bieu_do_{tab}_{kq.ma}_{chon}")
 
 
 # ------------------------------------------------------------------------------------------ khuyến nghị
@@ -309,7 +310,10 @@ with tab1:
     if ma:
         with st.spinner(f"Đang phân tích {ma}…"):
             kq, _, tl = phan_tich(ma, thu_lai)
-        if kq.khung and kq.loai == "vn" and tam in kq.frames:
+        if kq.khung and kq.loai == "vn" and kq.ma in du_lieu.CHI_SO_VN and tam in kq.frames:
+            st.caption("Chỉ số không mua/bán trực tiếp được – chỉ xem xu hướng và tín hiệu đỉnh.")
+            the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
+        elif kq.khung and kq.loai == "vn" and tam in kq.frames:
             the_khuyen_nghi(K.khuyen_nghi(kq, tam), von)
             the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
         elif kq.khung:

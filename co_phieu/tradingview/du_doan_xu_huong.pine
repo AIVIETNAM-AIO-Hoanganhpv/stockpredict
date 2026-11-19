@@ -303,47 +303,58 @@ choBan = huong != "Chỉ Mua"
 tinHieuMua = xh == 1 and xh[1] != 1
 tinHieuBan = xh == -1 and xh[1] != -1
 
-var float tp = na
-var float sl = na
+// Mức chốt lời / cắt lỗ RIÊNG cho lệnh Mua và lệnh Bán (không ghi đè nhau khi đảo chiều)
+var float tpL = na
+var float slL = na
+var float tpS = na
+var float slS = na
+bool vaoMua = false
+bool vaoBan = false
 
 if trongKy and tinHieuMua
     if choMua
         fiboOk = dungFibo and not na(tpMuaFibo) and tpMuaFibo > close and slMuaFibo < close
-        tp := fiboOk ? tpMuaFibo : close + atrTp * atrV
-        sl := fiboOk ? slMuaFibo : close - atrSl * atrV
+        tpL := fiboOk ? tpMuaFibo : close + atrTp * atrV
+        slL := fiboOk ? slMuaFibo : close - atrSl * atrV
         strategy.entry("Mua", strategy.long, comment="Mua " + str.tostring(diem, "#"))
-        strategy.exit("Thoát Mua", from_entry="Mua", limit=tp, stop=sl)
+        strategy.exit("Thoát Mua", from_entry="Mua", limit=tpL, stop=slL)
+        vaoMua := true
     else
         strategy.close("Bán", comment="Đổi chiều")
 
 if trongKy and tinHieuBan
     if choBan
         fiboOk = dungFibo and not na(tpBanFibo) and tpBanFibo < close and slBanFibo > close
-        tp := fiboOk ? tpBanFibo : close - atrTp * atrV
-        sl := fiboOk ? slBanFibo : close + atrSl * atrV
+        tpS := fiboOk ? tpBanFibo : close - atrTp * atrV
+        slS := fiboOk ? slBanFibo : close + atrSl * atrV
         strategy.entry("Bán", strategy.short, comment="Bán " + str.tostring(diem, "#"))
-        strategy.exit("Thoát Bán", from_entry="Bán", limit=tp, stop=sl)
+        strategy.exit("Thoát Bán", from_entry="Bán", limit=tpS, stop=slS)
+        vaoBan := true
     else
         strategy.close("Mua", comment="Đổi chiều")
 
-if strategy.position_size > 0
-    strategy.exit("Thoát Mua", from_entry="Mua", limit=tp, stop=sl)
+// Tín hiệu đỉnh: đóng lệnh Mua; nếu được phép thì đảo sang Bán (một lệnh entry tự đảo chiều,
+// không gọi close + entry cùng lúc để tránh khối lượng gấp đôi)
+if trongKy and tinHieuDinh and not vaoMua and not vaoBan
+    moBan = banKhiDinh and choBan
+    if moBan and strategy.position_size >= 0
+        slS := cao5 + 0.5 * atrV
+        tpS := close - 2 * (slS - close)
+        strategy.entry("Bán", strategy.short, comment="Bán đỉnh (" + str.tostring(soDH) + " dấu hiệu)")
+        strategy.exit("Thoát Bán", from_entry="Bán", limit=tpS, stop=slS)
+        vaoBan := true
+    else if strategy.position_size > 0 and thoatKhiDinh
+        strategy.close("Mua", comment="Đỉnh (" + str.tostring(soDH) + " dấu hiệu)")
+
+// Cập nhật lệnh thoát cho vị thế đang mở (bỏ qua phiên vừa đặt lệnh ngược chiều)
+if strategy.position_size > 0 and not vaoBan
+    strategy.exit("Thoát Mua", from_entry="Mua", limit=tpL, stop=slL)
     if thoatNgang and xh == 0
         strategy.close("Mua", comment="Đi ngang")
-if strategy.position_size < 0
-    strategy.exit("Thoát Bán", from_entry="Bán", limit=tp, stop=sl)
+if strategy.position_size < 0 and not vaoMua
+    strategy.exit("Thoát Bán", from_entry="Bán", limit=tpS, stop=slS)
     if thoatNgang and xh == 0
         strategy.close("Bán", comment="Đi ngang")
-
-// Thoát lệnh Mua / mở lệnh Bán khi có tín hiệu đỉnh
-if trongKy and tinHieuDinh
-    if strategy.position_size > 0 and thoatKhiDinh
-        strategy.close("Mua", comment="Đỉnh (" + str.tostring(soDH) + " dấu hiệu)")
-    if banKhiDinh and choBan and strategy.position_size >= 0
-        sl := cao5 + 0.5 * atrV
-        tp := close - 2 * (sl - close)
-        strategy.entry("Bán", strategy.short, comment="Bán đỉnh")
-        strategy.exit("Thoát Bán", from_entry="Bán", limit=tp, stop=sl)
 
 // Cảnh báo (tạo Alert → chọn strategy này → "alert() function calls only")
 if tinHieuDinh
@@ -355,6 +366,8 @@ if tinHieuBan and choBan
 
 // ───────────────────────────── Vẽ ─────────────────────────────
 coLenh = strategy.position_size != 0
+tp = strategy.position_size > 0 ? tpL : strategy.position_size < 0 ? tpS : na
+sl = strategy.position_size > 0 ? slL : strategy.position_size < 0 ? slS : na
 plot(coLenh ? tp : na, "Chốt lời", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
 plot(coLenh ? sl : na, "Cắt lỗ", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
 plot(ta.sma(close, 20), "MA20", color=color.new(color.orange, 30))

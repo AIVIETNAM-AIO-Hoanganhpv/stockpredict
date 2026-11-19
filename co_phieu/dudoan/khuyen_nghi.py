@@ -78,8 +78,24 @@ class KhuyenNghi:
 
 
 # ------------------------------------------------------------------------- làm tròn giá
+def loai_gia(ma: str, loai: str = "vn", san: str | None = None) -> str:
+    """Kiểu bước giá: 'vn' (HOSE: 10/50/100 đ), 'vn_100' (HNX, UPCoM: 100 đ),
+    'chi_so' (VNINDEX…: không làm tròn), còn lại (forex, quốc tế): không làm tròn."""
+    from .du_lieu import CHI_SO_VN, san_cua
+    if loai != "vn":
+        return loai
+    if ma.upper() in CHI_SO_VN:
+        return "chi_so"
+    san = san if san is not None else san_cua(ma)
+    return "vn_100" if san in ("HNX", "UPCOM") else "vn"
+
+
 def buoc_gia(p: float, loai: str = "vn") -> float:
-    if loai != "vn" or p <= 0:
+    if p <= 0:
+        return 0.0
+    if loai == "vn_100":
+        return 100.0
+    if loai != "vn":
         return 0.0
     return 10.0 if p < 10_000 else (50.0 if p < 50_000 else 100.0)
 
@@ -152,8 +168,10 @@ def tim_vung_mua(df: pd.DataFrame, kqk: KetQuaKhung) -> VungMua | None:
 
 
 # ------------------------------------------------------------------------- khuyến nghị
-def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str = "vn") -> KhuyenNghi:
-    """Khuyến nghị MUA cho khung `tam` (D: ngắn hạn 1–3 tháng, W: trung hạn 3–9 tháng)."""
+def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str | None = None, san: str | None = None) -> KhuyenNghi:
+    """Khuyến nghị MUA cho khung `tam` (D: ngắn hạn 1–3 tháng, W: trung hạn 3–9 tháng).
+    `loai`/`san` quyết định bước giá; để trống thì tự suy ra từ mã."""
+    loai = loai_gia(kq.ma, loai or kq.loai, san)
     kqk = next((k for k in kq.khung if k.khung == tam), None)
     df = kq.frames.get(tam)
     if kqk is None or df is None or len(df) < 40:
@@ -183,6 +201,15 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str = "vn") -> KhuyenNghi:
         trong_vung = False
         ly_do.append("Không có vùng hỗ trợ rõ ràng gần giá.")
 
+    # Làm tròn theo bước giá TRƯỚC khi xét ngưỡng R:R (tránh "Mua" với R:R thực tế < 1,5)
+    for f in ("gia_mua", "cat_lo"):
+        setattr(kn, f, lam_tron(getattr(kn, f), loai, xuong=True))
+    for f in ("chot_loi1", "chot_loi2"):
+        setattr(kn, f, lam_tron(getattr(kn, f), loai, xuong=True))
+    if kn.vung:
+        kn.vung = VungMua(lam_tron(kn.vung.thap, loai), lam_tron(kn.vung.cao, loai, xuong=False),
+                          kn.vung.ly_do)
+
     stoch_k = float(chi_bao.stoch(df)["k"].iloc[-1])
     rr = kn.rr
     if diem < -20 or kqk.xu_huong == -1:
@@ -209,13 +236,6 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str = "vn") -> KhuyenNghi:
         kn.muc = "Chờ về vùng mua"
         ly_do.append(f"Stoch quá mua ({stoch_k:.0f}) – chờ nhịp chỉnh.")
 
-    for f in ("gia_mua", "cat_lo"):
-        setattr(kn, f, lam_tron(getattr(kn, f), loai, xuong=True))
-    for f in ("chot_loi1", "chot_loi2"):
-        setattr(kn, f, lam_tron(getattr(kn, f), loai, xuong=True))
-    if kn.vung:
-        kn.vung = VungMua(lam_tron(kn.vung.thap, loai), lam_tron(kn.vung.cao, loai, xuong=False),
-                          kn.vung.ly_do)
     dfd = kq.frames.get("D", df)
     kn.gtgd = float((dfd["close"] * dfd["volume"]).iloc[-20:].mean()) if len(dfd) else None
     return kn
@@ -259,10 +279,11 @@ def _nen_dao_chieu(df, atr) -> str | None:
     return None
 
 
-def tin_hieu_dinh(kq: KetQua, tam: str = "D", loai: str = "vn",
-                  nguong: int = NGUONG_DINH) -> TinHieuDinh:
+def tin_hieu_dinh(kq: KetQua, tam: str = "D", loai: str | None = None,
+                  nguong: int = NGUONG_DINH, san: str | None = None) -> TinHieuDinh:
     """Đếm dấu hiệu đỉnh trên khung `tam`. ≥ nguong dấu hiệu → Chốt lời dần; ≥ nguong+2 hoặc có
     CHoCH giảm → Bán mạnh; nguong-1 → Theo dõi đỉnh."""
+    loai = loai_gia(kq.ma, loai or kq.loai, san)
     kqk = next((k for k in kq.khung if k.khung == tam), None)
     df = kq.frames.get(tam)
     if kqk is None or df is None or len(df) < 40 or not kqk.cau_truc:
@@ -396,8 +417,8 @@ def danh_gia_vi_the(gia_von: float, so_luong: float, kq: KetQua, kn: KhuyenNghi 
     df = kq.frames.get(kqk.khung)
     atr = float(chi_bao.atr(df).iloc[-1]) if df is not None else 0.0
     # Cắt lỗ động: dưới đáy gần nhất (nâng dần theo giá)
-    ls = [s.price for s in (kqk.cau_truc.swings if kqk.cau_truc else []) if s.kind == "L" and s.price < gia]
-    cat_lo = (ls[-1] - 0.3 * atr) if ls else None
+    ls = [s.price for s in (kqk.cau_truc.swings if kqk.cau_truc else []) if s.kind == "L"]
+    cat_lo = (ls[-1] - 0.3 * atr) if ls else None      # đáy gần nhất – giá thủng xuống là tín hiệu bán
     if pct < -0.07 and kq.xu_huong <= 0:
         goi_y = "Cắt lỗ"
     elif cat_lo and gia < cat_lo:

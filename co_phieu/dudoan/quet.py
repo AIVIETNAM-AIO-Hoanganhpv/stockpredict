@@ -27,13 +27,14 @@ class KetQuaMa:
     dinh: dict = None           # {"D": TinHieuDinh, "W": TinHieuDinh}
 
 
-def phan_tich_df(ma: str, df: pd.DataFrame, loai: str = "vn"):
-    """Phân tích đủ M/W/D từ dữ liệu ngày, trả về (KetQua, {tầm: KhuyenNghi})."""
-    frames = {"M": du_lieu.resample(df, "M"), "W": du_lieu.resample(df, "W"), "D": df.iloc[-600:]}
+def phan_tich_df(ma: str, df: pd.DataFrame, loai: str = "vn", san: str | None = None):
+    """Phân tích đủ M/W/D từ dữ liệu ngày, trả về (KetQua, {tầm: KhuyenNghi}).
+    Dùng đúng dữ liệu như trang tra cứu để kết quả hai nơi khớp nhau."""
+    frames = {"M": du_lieu.resample(df, "M"), "W": du_lieu.resample(df, "W"), "D": df}
     ds = [phan_tich.phan_tich_khung(f, k) for k, f in frames.items()]
     kq = phan_tich.tong_hop(ma, loai, ds)
     kq.frames = frames
-    return kq, {tam: K.khuyen_nghi(kq, tam, loai) for tam in ("D", "W")}
+    return kq, {tam: K.khuyen_nghi(kq, tam, loai, san) for tam in ("D", "W")}
 
 
 def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác"):
@@ -49,8 +50,8 @@ def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác"):
         elif r.gtgd < gtgd_min:
             r.loi = "Thanh khoản thấp"
         else:
-            r.kq, r.kn = phan_tich_df(ma, df)
-            r.dinh = {tam: K.tin_hieu_dinh(r.kq, tam) for tam in ("D", "W")}
+            r.kq, r.kn = phan_tich_df(ma, df, san=san)
+            r.dinh = {tam: K.tin_hieu_dinh(r.kq, tam, san=san) for tam in ("D", "W")}
             if len(df) > 21:
                 r.hieu_suat_20 = float(df["close"].iloc[-1] / df["close"].iloc[-21] - 1)
     except Exception as e:
@@ -231,7 +232,7 @@ def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
         md += ["", f"## {'Ngắn hạn – khung ngày (1–3 tháng)' if tam == 'D' else 'Trung hạn – khung tuần (3–9 tháng)'}", "",
                "| Mã | Sàn | Khuyến nghị | Giá | Vùng mua | Cắt lỗ | Chốt lời | R:R | % lãi |",
                "|---|---|---|---:|---|---:|---:|---:|---:|"]
-        for _, x in b[b["Hạng"] >= 2].head(30).iterrows():
+        for _, x in (b[b["Hạng"] >= 2].head(30).iterrows() if not b.empty else []):
             md.append(f"| {x['Mã']} | {x['Sàn']} | {x['Khuyến nghị']} | {x['Giá']:,.0f} | {x['Vùng mua']} | "
                       f"{x['Cắt lỗ'] or 0:,.0f} | {x['Chốt lời'] or 0:,.0f} | {x['R:R'] or '–'} | {x['% lãi'] or '–'} |")
     for tam, b in bans.items():

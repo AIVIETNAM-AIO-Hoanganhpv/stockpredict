@@ -5,6 +5,7 @@ Ví dụ:
   py du_doan.py --tat-ca --bao-cao       phân tích mọi mã trong ma.txt, ghi báo cáo vào bao_cao/
   py du_doan.py --file gia_FPT.csv --ten FPT     dùng file giá tự tải (cột Ngày, Mở, Cao, Thấp, Đóng, KL)
   py du_doan.py --quet-thi-truong              quét toàn bộ HOSE/HNX/UPCoM → khuyến nghị mua, xếp hạng
+  py du_doan.py --kiem-dinh                    backtest tín hiệu Mua / Bán ở đỉnh trên các mã đủ thanh khoản
 """
 import argparse
 import sys
@@ -63,6 +64,8 @@ def main(argv=None):
     ap.add_argument("--san", default="HSX,HNX,UPCOM", help="sàn cần quét, VD: HSX,HNX")
     ap.add_argument("--gtgd", type=float, default=1.0, help="GTGD tối thiểu (tỷ đồng/phiên)")
     ap.add_argument("--von", type=float, default=100e6, help="số vốn mỗi lệnh để tính lãi (đồng)")
+    ap.add_argument("--kiem-dinh", action="store_true",
+                    help="backtest tín hiệu trên các mã đủ thanh khoản (cần chạy --quet-thi-truong trước)")
     a = ap.parse_args(argv)
 
     if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -73,6 +76,8 @@ def main(argv=None):
 
     if a.quet_thi_truong:
         return quet_thi_truong(a)
+    if a.kiem_dinh:
+        return kiem_dinh(a)
 
     jobs = []
     if a.file:
@@ -104,6 +109,25 @@ def main(argv=None):
     return 0 if any(k.khung for k in ket_qua) else 1
 
 
+def kiem_dinh(a):
+    import json
+    import datetime as dt
+    from dudoan import kiem_dinh as KD
+    f = Path(a.thu_muc) / "thi_truong.json"
+    if a.ma:
+        ds = [m.upper() for m in a.ma]
+    elif f.exists():
+        ds = [r["Mã"] for r in json.loads(f.read_text(encoding="utf-8"))["D"]]
+    else:
+        print("Chưa có danh sách mã: chạy --quet-thi-truong trước, hoặc ghi mã sau lệnh.")
+        return 1
+    print(f"Kiểm định {len(ds)} mã (có thể mất 10–20 phút)…")
+    res = KD.chay(ds, tien_trinh=lambda i, n: print(f"  {i}/{n}", flush=True) if i % 20 == 0 else None)
+    KD.ghi(a.thu_muc, res, dt.date.today().strftime("%d/%m/%Y"))
+    print((Path(a.thu_muc) / "kiem_dinh.md").read_text(encoding="utf-8"))
+    return 0
+
+
 def quet_thi_truong(a):
     from dudoan import quet
     print("Đang quét toàn thị trường (vài phút)…")
@@ -114,8 +138,8 @@ def quet_thi_truong(a):
     print(f"Quét {tk['tong']} mã, phân tích {tk['phan_tich']} mã đủ thanh khoản "
           f"({tk['tang']} tăng, {tk['giam']} giảm).")
     for tam, ten in (("D", "NGẮN HẠN (D)"), ("W", "TRUNG HẠN (W)")):
-        top = [x for x in data[tam] if x["Hạng"] >= 3][:15]
-        print(f"\n== {ten}: {len([x for x in data[tam] if x['Hạng'] >= 3])} mã nên mua ==")
+        top = [x for x in data[tam] if x.get("Hạng", 0) >= 3][:15]
+        print(f"\n== {ten}: {len([x for x in data[tam] if x.get('Hạng', 0) >= 3])} mã nên mua ==")
         for x in top:
             print(f"  {x['Mã']:<4} {x['Khuyến nghị']:<9} giá {x['Giá']:>9,.0f}  mua {x['Giá mua'] or 0:>9,.0f}  "
                   f"cắt lỗ {x['Cắt lỗ'] or 0:>9,.0f}  chốt lời {x['Chốt lời'] or 0:>9,.0f}  "

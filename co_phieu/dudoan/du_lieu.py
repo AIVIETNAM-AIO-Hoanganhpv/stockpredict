@@ -213,6 +213,20 @@ def danh_sach_ma_vn(san=("HSX", "HNX", "UPCOM"), lam_moi: bool = False) -> pd.Da
     return df[df["san"].isin(san)].reset_index(drop=True)
 
 
+_SAN_CUA: dict = {}
+
+
+def san_cua(ma: str) -> str:
+    """Sàn niêm yết của mã VN (HSX / HNX / UPCOM), theo du_lieu_ma/ma_vn.csv; '' nếu không rõ."""
+    if not _SAN_CUA and FILE_MA.exists():
+        try:
+            d = pd.read_csv(FILE_MA, encoding="utf-8", dtype=str)
+            _SAN_CUA.update(zip(d["ma"], d["san"]))
+        except Exception:
+            pass
+    return _SAN_CUA.get(ma.upper(), "")
+
+
 def yahoo_symbol(loai: str, ma: str) -> str:
     if loai == "fx":
         return YAHOO_DAC_BIET.get(ma, f"{ma}=X")

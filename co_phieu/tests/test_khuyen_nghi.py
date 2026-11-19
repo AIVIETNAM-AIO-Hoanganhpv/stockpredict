@@ -157,3 +157,83 @@ def test_nganh_va_bang_ban(thi_truong_gia):
     assert bb.empty or bb["Hạng"].is_monotonic_decreasing
     data = quet.ghi(thi_truong_gia, kq)
     assert {"ban_D", "ban_W", "nganh_D", "nganh_W"} <= set(data)
+
+
+# ---------------------------------------------------------------- lỗi đã sửa (chống tái phát)
+def test_buoc_gia_theo_san_va_chi_so():
+    assert K.loai_gia("ABC", "vn", "HNX") == "vn_100"
+    assert K.loai_gia("ABC", "vn", "UPCOM") == "vn_100"
+    assert K.loai_gia("ABC", "vn", "HSX") == "vn"
+    assert K.loai_gia("VNINDEX", "vn") == "chi_so"
+    assert K.loai_gia("EURUSD", "fx") == "fx"
+    assert K.lam_tron(23_480, "vn_100") == 23_400
+    assert K.lam_tron(1703.01, "chi_so") == 1703.01
+
+
+def test_khuyen_nghi_ngoai_te_khong_lam_tron():
+    df = gia_vn(1.0) / [250, 250, 250, 250, 1] * [0.01, 0.01, 0.01, 0.01, 1]   # giá kiểu 1.0x
+    kq, _ = quet.phan_tich_df("EURUSD", df, loai="fx")
+    kn = K.khuyen_nghi(kq, "D")
+    if kn.gia_mua:
+        assert kn.gia_mua > 0.1 and kn.cat_lo > 0.1          # trước đây bị làm tròn về 0
+
+
+def test_mua_luon_co_rr_toi_thieu_sau_lam_tron():
+    for seed in range(1, 9):
+        _, kn = quet.phan_tich_df("AAA", gia_vn(1.0, seed=seed), san="HNX")
+        for tam in ("D", "W"):
+            k = kn[tam]
+            if k.muc == "Mua":
+                assert k.rr >= 1.5
+            if k.muc == "Mua mạnh":
+                assert k.rr >= 2
+            for p in (k.gia_mua, k.cat_lo, k.chot_loi1):
+                assert p is None or p % 100 == 0                # HNX: bước giá 100 đ
+
+
+def test_danh_muc_thung_ho_tro():
+    df = gia_vn(1.0)
+    kq, _ = quet.phan_tich_df("AAA", df)
+    ls = [s.price for s in kq.chinh.cau_truc.swings if s.kind == "L"]
+    df2 = df.copy()
+    gia_moi = ls[-1] * 0.93                                       # thủng đáy gần nhất
+    df2.iloc[-1, :4] = [gia_moi * 1.01, gia_moi * 1.02, gia_moi * 0.99, gia_moi]
+    kq2, kn2 = quet.phan_tich_df("AAA", df2)
+    v = K.danh_gia_vi_the(gia_moi * 0.5, 100, kq2, kn2["D"])
+    assert v["goi_y"] in ("Bán – thủng hỗ trợ", "Chốt lời / hạ tỷ trọng", "Bán ở đỉnh"), v
+
+
+def test_ghi_khi_khong_co_ma_nao(tmp_path):
+    quet.ghi(tmp_path, [])
+    quet.ghi(tmp_path, [quet.KetQuaMa("AAA", "HSX", "A", loi="Thanh khoản thấp")])
+    assert (tmp_path / "khuyen_nghi.md").exists()
+
+
+def test_khong_dua_ke_hoach_ban_khong_cho_co_phieu_vn():
+    from dudoan import bao_cao
+    kq, _ = quet.phan_tich_df("BBB", gia_vn(-0.3, seed=2))
+    assert kq.xu_huong == -1 and bao_cao.ke_hoach(kq) == {}
+
+
+def test_kiem_dinh_khong_nhin_truoc_tuong_lai():
+    from dudoan import kiem_dinh as KD
+    df = gia_vn(1.0, n=520)
+    r = KD.kiem_dinh_ma("AAA", df, buoc=20, so_diem=8)
+    assert len(r["goc"]) >= 5
+    # Đổi dữ liệu SAU điểm cuối được xét không được làm thay đổi tín hiệu tại các điểm trước đó
+    df2 = df.copy()
+    df2.iloc[-30:, :4] = df2.iloc[-30:, :4] * 0.5
+    r2 = KD.kiem_dinh_ma("AAA", df2, buoc=20, so_diem=8)
+    assert [x[0] for x in r["mua"]] == [x[0] for x in r2["mua"]]
+    assert [x[0] for x in r["ban"]] == [x[0] for x in r2["ban"]]
+    t = KD.tong_hop([r])
+    assert "goc" in t and "ban" in t
+    assert "Kiểm định" in KD.markdown(t, "thử")
+
+
+def test_giao_dich_cat_lo_truoc_khi_cung_phien():
+    from dudoan import kiem_dinh as KD
+    o = np.array([100, 100, 100.0]); h = np.array([100, 120, 100.0]); l = np.array([100, 80, 100.0])
+    c = np.array([100, 100, 100.0])
+    lai, kq, _ = KD._giao_dich(o, h, l, c, 1, 100, 90, 110, 2)
+    assert kq == "cắt lỗ" and lai < -0.09                 # cùng phiên chạm cả hai → tính cắt lỗ

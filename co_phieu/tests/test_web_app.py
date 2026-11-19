@@ -74,3 +74,11 @@ def test_quet_thi_truong_tren_web(gia_gia, monkeypatch):
         at.radio(key="xem").set_value(che_do).run()
         assert not at.exception, (che_do, at.exception)
     assert any("Ngân hàng" in str(df.value) for df in at.dataframe)
+
+
+def test_tra_cuu_ma_trung_danh_sach_theo_doi(gia_gia):
+    """Mã vừa tra cứu vừa có trong tab Theo dõi → không được trùng ID biểu đồ."""
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
+    at.text_input[0].set_value("VNINDEX")
+    nut(at, "Phân tích").click().run()
+    assert not at.exception, at.exception

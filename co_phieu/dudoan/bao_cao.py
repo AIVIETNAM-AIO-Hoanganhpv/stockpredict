@@ -33,6 +33,8 @@ def ke_hoach(kq: KetQua) -> dict:
     p = kq.chinh.fibo
     if not p or not kq.xu_huong or (p.up != (kq.xu_huong > 0)):
         return {}
+    if kq.loai in ("vn", "intl") and kq.xu_huong < 0:
+        return {}          # cổ phiếu không bán khống được → không đưa kế hoạch bán
     return {"vao": kq.chinh.gia, "sl": p.sl, "tp1": p.tp1, "tp2": p.tp2, "hoi": p.depth}
 
 
