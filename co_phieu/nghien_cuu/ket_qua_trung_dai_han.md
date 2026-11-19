@@ -93,3 +93,62 @@ Liquid symbols only (292): v2 9 m TEST average trade −0.2 %, beats own B&H in 
   v2 + v1 with Vietnamese columns; all lots ADX 25 both holds v2 + v1; portfolio per year; portfolio summary).
 - Code: `dh.py` (strategy port), `repro.py` + `js_run.js` (JS check; `GreenView_v1.html` = git HEAD build, `GreenView_v2.html` = current),
   `mat.py` (matrices), `persym_dh.py` (per symbol + random), `engine_dh.py` / `port.py` (portfolio + random), `bench.py`, `report.py`.
+
+---
+
+## v3 = v2 + closing-price stop (added 2026-11-19, user's choice; JS `R.catDong` in `DEFS.st_daihan`)
+Rule change: no intraday stop. Exit everything at the next open if any lot has (a) a weekly close below its stop, checked on the
+last session of each COMPLETED week, or (b) a daily close ≤ its fill × 0.85. The stop level and the entries are the same as v2.
+
+**Verdict: v3 is a little less bad than v2, but there is still no edge.** In the portfolio TEST it is −1.3 %/yr (9 months) and
+−0.1 %/yr (10 years), against +7.3 % for buy & hold and +10.6 % for the phase filter. It sits at the 57th / 68th percentile of 200
+random-entry runs. The closing-price stop gives the trades more room: the average trade rises from about +1 % to about +3.4 % (TEST),
+and the win rate from 24 % to 31 %. The price is bigger single losses: the worst stopped lot is −30 % (v2: −23 %), and 5 % of stopped
+lots lose more than −22 %.
+
+**Check against the JS:** the lot lists are identical in 141/141 cases (47 symbols × 3 settings, full history, current
+GreenView build `GreenView_v3.html`). Your test cases match: SAB in 2023-03-14 → out 2023-04-10 (Cắt lỗ); VHM in 2026-02-24 →
+out 2026-03-04 (Cắt lỗ); GMD in 2026-03-30 → still open on 2026-11-19. The v1 and v2 results above did not change on re-run.
+
+### Portfolio, 1 bn VND (risk 20 %, max 5 names)
+| strategy | TRAIN CAGR | **TEST CAGR** | TEST max DD | TEST trades | FULL CAGR | FULL max DD | random ≥ real (TEST) |
+|---|---|---|---|---|---|---|---|
+| **v3, 9 months, ADX 25** | −0.6 % | **−1.3 %** | −48 % | 57 | −0.3 % | −48 % | 43 % |
+| **v3, 10 years, ADX 25** | −0.6 % | **−0.1 %** | −54 % | 46 | 0.0 % | −54 % | 33 % |
+| v2, 9 months, ADX 25 | −0.8 % | −3.3 % | −51 % | 59 | −1.9 % | −51 % | 56 % |
+| v2, 10 years, ADX 25 | −1.3 % | −5.1 % | −67 % | 50 | −3.2 % | −67 % | 71 % |
+| EW basket buy & hold | −8.4 % | +7.3 % | −59 % | | −1.0 % | −88 % | |
+| market-phase filter | +11.5 % | +10.6 % | −28 % | | +11.1 % | −38 % | |
+
+- **ADX threshold (portfolio TEST CAGR; off / 20 / 25 / 30):**
+  - v3 9 months: +6.0 / +1.9 / −1.3 / −0.6 %.
+  - v3 10 years: +8.9 / +18.1 / −0.1 / −1.2 %.
+  - These jumps come from only 40–80 trades in 13 years, so they are noise, not a signal.
+- **Sizing:** every risk/N setting gives v3 TEST between −1.3 % and +0.5 %/yr. The sizing chosen on TRAIN gives −0.4 % (9 months) and −1.1 % (10 years).
+- **Concentration:**
+  - v3 10 years: TEST −2.7 %/yr without PET.
+  - v3 9 months: TEST −1.1 %/yr without HHS.
+- **Per year:**
+  - 2021: +59 % (9 months) / +79 % (10 years).
+  - 2022: −16 % / −28 % (v2: −21 % / −37 %).
+  - 2025: −23 % / −22 %.
+
+### Per symbol (100 % of capital per symbol), ADX 25, all 1,499 symbols
+| | trades | trades / 4 yrs / symbol | avg trade | median | win | % symbols beating own B&H | random entries: same | random runs ≥ real avg trade |
+|---|---|---|---|---|---|---|---|---|
+| **v3 9 m, TEST** | 296 | 0.1 | +3.4 % | −7.1 % | 31 % | 32.2 % | 31.9 % | 9 % |
+| **v3 10 y, TEST** | 294 | 0.1 | +3.3 % | −8.8 % | 25 % | 32.0 % | 31.9 % | 18 % |
+| v3 9 m, FULL | 338 | 0.1 | +3.1 % | −7.7 % | 31 % | 39.6 % | 39.6 % | 14 % |
+| v3 10 y, FULL | 336 | 0.1 | +3.6 % | −9.1 % | 25 % | 39.6 % | 39.7 % | 30 % |
+| v2 9 m, TEST | 298 | 0.1 | +1.0 % | −7.6 % | 24 % | 32.2 % | 31.9 % | 22 % |
+
+- The v3 9-month average trade in TEST is better than 91 % of random runs. That is the closest any version gets to "better than random", but:
+  - it is not below the usual 5 % bar;
+  - TRAIN goes the other way (75 % of random runs are better);
+  - it does not show up in the portfolio.
+- On liquid symbols v3 TEST average trade is +0.5 % (9 months) / +0.8 % (10 years). Only 13 % of the symbols that traded beat their own buy & hold (B&H median +9.2 %/yr).
+- Exit reasons per lot:
+  - v3 9 months: stop 54 %, monthly sell 24 %, max hold 21 %.
+  - v3 10 years: stop 63 %, monthly sell 35 %.
+
+Excel: new sheets `v3 cat lo dong cua - tung ma` and `v3 cat lo dong cua - lenh`. The other sheets now include v3 rows. All v3 tables are in `tables.md`.
