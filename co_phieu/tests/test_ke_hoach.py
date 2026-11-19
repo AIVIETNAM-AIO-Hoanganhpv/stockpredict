@@ -67,3 +67,13 @@ def test_fibo_dai_han_chi_muc_1():
         if x:
             assert x["ti_le"] == 1.0 and abs(x["chot_loi"] - (x["C"] + x["B"] - x["A"])) < 1e-6
     assert K.LAI_FIBO_TL == 1.0 and K.LAI_TOI_THIEU == 0.10
+
+
+def test_adx_tuan_tren_the_ke_hoach():
+    from dudoan import khuyen_nghi as K
+    from dudoan.quet import phan_tich_df
+    df = gia_gia_lap(1.0, n=600, seed=4, freq="B") * [300, 300, 300, 300, 1]
+    kq, kn = phan_tich_df("ABC", df)
+    gt = K.giai_thich(kq, kn["W"], 1e8)
+    assert gt["tam"] == "W" and gt["adx_tuan"] and gt["adx_tuan"]["dat"] == (
+        gt["adx_tuan"]["adx"] >= 25 and gt["adx_tuan"]["pdi"] > gt["adx_tuan"]["mdi"])

@@ -682,6 +682,17 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
                 kh["fibo"] = fb
     except Exception:
         kh["fibo"] = None
+    # Trung/dài hạn: ADX(14) khung TUẦN (tuần đã xong) ≥ 25 và +DI > −DI mới vào; giữ tối đa 9 tháng / 10 năm; cắt lỗ ≤ 15%
+    kh["adx_tuan"], kh["tam"] = None, tam
+    if tam in ("W", "M") and kq.frames.get("D") is not None:
+        try:
+            from . import level1
+            a = chi_bao.adx(level1.nen_khung(kq.frames["D"], "W")).dropna()
+            if len(a):
+                v, p_, m_ = (float(a[c].iloc[-1]) for c in ("adx", "pdi", "mdi"))
+                kh["adx_tuan"] = {"adx": v, "pdi": p_, "mdi": m_, "dat": v >= ADX_TOI_THIEU and p_ > m_}
+        except Exception:
+            kh["adx_tuan"], kh["tam"] = None, tam
     kh["tom_tat"] = (f"Mua ~{_d(kn.gia_mua)}, cắt lỗ {_d(kn.cat_lo)} ({kn.lo_pct:+.1%}), chốt lời {_d(kn.chot_loi1)} "
                      f"({kn.lai_pct:+.1%})" if kn.gia_mua and kn.cat_lo and kn.chot_loi1 and kn.lo_pct is not None else "")
     return kh
@@ -689,6 +700,9 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
 
 LAI_FIBO_TL = 1.0       # cổ phiếu dài hạn: chỉ dùng mức Fibo 1,0 (không 1,618)
 LAI_TOI_THIEU = 0.10    # lãi dự kiến tới mức 1,0 dưới 10% → không vào lệnh
+ADX_TOI_THIEU = 25      # ADX tuần tối thiểu (kèm +DI > −DI)
+CAT_LO_TOI_DA = 0.15    # cắt lỗ không xa quá 15%
+GIU_TOI_DA_DAI_HAN = {"W": "9 tháng", "M": "10 năm"}
 
 
 def ap_pha(kn: KhuyenNghi, ck: dict | None) -> KhuyenNghi:

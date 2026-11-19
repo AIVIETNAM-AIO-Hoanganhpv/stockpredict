@@ -1031,6 +1031,13 @@ def the_ke_hoach(kq, kn, gt: dict, gon: bool = False):
         html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>{nhan}: {gd(fb['chot_loi'])} "
                  f"({pt(fb['lai_pct'])}){canh}</b>" + ("" if gon else f"<div style='font-size:12.5px;color:#64748b'>{fb['vi_sao']}"
                  f"{giai} Đang kiểm định.</div>") + "</div>")
+    ax = gt.get("adx_tuan")
+    if ax:
+        html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'>📈 ADX tuần: <b>{ax['adx']:.0f}</b> "
+                 f"(+DI {ax['pdi']:.0f} / −DI {ax['mdi']:.0f}) → "
+                 + ("<b style='color:#15803d'>xu hướng tăng đủ mạnh ✅</b>" if ax["dat"] else
+                    "<b style='color:#dc2626'>chưa đủ (cần ADX ≥ 25 và +DI > −DI) ⛔</b>")
+                 + f" · Giữ tối đa {'10 năm' if gt.get('tam') == 'M' else '9 tháng'}, cắt lỗ không quá 15%.</div>")
     if gt.get("ngay_du_kien") is not None:
         kh = (f" (sớm {gt['ngay_som']:%d/%m} – muộn {gt['ngay_muon']:%d/%m/%Y})"
               if gt.get("ngay_som") is not None and gt.get("ngay_muon") is not None else "")
