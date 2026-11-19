@@ -18,8 +18,9 @@ from . import chi_bao, du_lieu
 KHUNG_GD = "4H"            # khung giao dịch mặc định cho forex
 KHUNG_LON = {"15m": "1H", "1H": "4H", "4H": "D", "D": "W", "W": "M", "M": None}
 KHUNG_THU_TU = ["15m", "1H", "4H", "D", "W", "M"]
-TAM_GIU = {"15m": "vài giờ", "1H": "1–3 ngày", "4H": "vài ngày – 2 tuần", "D": "vài tuần", "W": "vài tháng",
-           "M": "nhiều tháng"}
+TAM_GIU = {"15m": "4–8 giờ", "1H": "1–3 ngày", "4H": "1–2 tuần", "D": "1–2 tháng", "W": "3–6 tháng",
+           "M": "11–18 tháng"}                          # bảng "Khung thời gian giao dịch" của khoá học (forex)
+TAM_GIU_COIN = {**TAM_GIU, "D": "1–1,5 tháng", "W": "3–4,5 tháng"}
 SL_ATR = 0.5
 TP_R = 3.0
 SL_MAX_ATR = 3.0         # cắt lỗ xa hơn 3 ATR thì dùng 1,5 ATR (giữ khối lượng hợp lý)
@@ -183,7 +184,7 @@ def ke_hoach_cac_khung(kq, von_usd: float = 10_000, rui_ro_pct: float = 1.0, rui
         except Exception as e:
             kh = {"huong": None, "khung": k, "ly_do": str(e)[:100]}
         kh["khung"] = k
-        kh["tam_giu"] = TAM_GIU[k]
+        kh["tam_giu"] = (TAM_GIU_COIN if thong_so(kq.ma).loai == "crypto" else TAM_GIU)[k]
         ra.append(kh)
     return ra
 
