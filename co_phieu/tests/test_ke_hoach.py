@@ -56,3 +56,14 @@ def test_fibo_theo_song():
         if x:
             assert x["B"] > x["A"] and x["C"] >= x["A"] and x["chot_loi"] > df.close.iloc[-1] * 1.01
             assert x["ti_le"] in F.BAC_TL
+
+
+def test_fibo_dai_han_chi_muc_1():
+    """Cổ phiếu dài hạn: chỉ mức 1,0 (không nâng lên 1,618); lãi dự kiến dưới 10% → không vào."""
+    from dudoan import fibo as F, khuyen_nghi as K
+    df = gia_gia_lap(1.0, n=600, seed=7, freq="B") * [300, 300, 300, 300, 1]
+    for khung in ("W", "M"):
+        x = F.muc_tieu_song(df, khung, float(df.close.iloc[-1]), ti_le_co_dinh=1.0)
+        if x:
+            assert x["ti_le"] == 1.0 and abs(x["chot_loi"] - (x["C"] + x["B"] - x["A"])) < 1e-6
+    assert K.LAI_FIBO_TL == 1.0 and K.LAI_TOI_THIEU == 0.10

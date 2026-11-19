@@ -87,11 +87,13 @@ def ti_le_theo_hoi(sau: float) -> float:
     return 1.0
 
 
-def muc_tieu_song(df_ngay, khung: str = "W", gia_vao: float | None = None, k: int | None = None) -> dict | None:
+def muc_tieu_song(df_ngay, khung: str = "W", gia_vao: float | None = None, k: int | None = None,
+                  ti_le_co_dinh: float | None = None) -> dict | None:
     """Mục tiêu chốt lời Fibo đo trên sóng tăng gần nhất của khung lệnh (W: lệnh tuần, M: lệnh tháng, D: ngày).
     A = đáy trước đỉnh B, B = đỉnh gần nhất đã xác nhận (k nến mỗi bên), C = giá thấp nhất từ sau B đến nay.
     Độ sâu hồi = (B − C)/(B − A) → tỉ lệ 1.618 / 1.272 / 1.0; mục tiêu = C + tỉ lệ × (B − A).
-    Nếu mục tiêu ≤ giá vào + 1% thì nâng lên mức kế tiếp (1.0 → 1.272 → 1.618 → 2.0 → 2.618)."""
+    Nếu mục tiêu ≤ giá vào + 1% thì nâng lên mức kế tiếp (1.0 → 1.272 → 1.618 → 2.0 → 2.618).
+    `ti_le_co_dinh` (vd 1.0 – chiến lược dài hạn): chỉ dùng đúng mức đó, không nâng mức."""
     from . import level1
     b = level1.nen_khung(df_ngay, khung)
     k = k or (3 if khung == "D" else 2)
@@ -115,7 +117,9 @@ def muc_tieu_song(df_ngay, khung: str = "W", gia_vao: float | None = None, k: in
             return None
         sau = (B - C) / (B - A)
         tl0 = ti_le_theo_hoi(sau)
-        for x in BAC_TL:
+        for x in ([ti_le_co_dinh] if ti_le_co_dinh else BAC_TL):
+            if ti_le_co_dinh:
+                tl0 = x
             if x >= tl0 and C + x * (B - A) > gia_vao * 1.01:
                 tp = C + x * (B - A)
                 return {"khung": khung, "A": A, "B": B, "C": C, "ngay_A": ngay_a, "ngay_B": ngay_b, "do_sau": sau,

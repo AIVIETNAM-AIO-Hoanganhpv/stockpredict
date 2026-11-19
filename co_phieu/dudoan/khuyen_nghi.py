@@ -662,19 +662,33 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
     try:
         from . import fibo as F
         if kq.frames.get("D") is not None and kn.gia_mua:
-            fb = F.muc_tieu_song(kq.frames["D"], tam, kn.gia_mua)
+            fb = None
+            if tam in ("W", "M"):
+                # Cổ phiếu dài hạn: chỉ mức 1,0 của sóng THÁNG (không có thì sóng tuần); lãi dự kiến < 10% → không vào
+                for kh_song in ("M", "W"):
+                    fb = F.muc_tieu_song(kq.frames["D"], kh_song, kn.gia_mua, ti_le_co_dinh=LAI_FIBO_TL)
+                    if fb:
+                        break
+            else:
+                fb = F.muc_tieu_song(kq.frames["D"], tam, kn.gia_mua)
             if fb:
                 fb["chot_loi"] = lam_tron(fb["chot_loi"], loai_gia(kq.ma, kq.loai), xuong=False)
                 fb["lai_pct"] = fb["chot_loi"] / kn.gia_mua - 1
-                fb["vi_sao"] = (f"Sóng {tam}: đáy A {_d(fb['A'])} ({fb['ngay_A']:%m/%Y}) → đỉnh B {_d(fb['B'])} ({fb['ngay_B']:%m/%Y}), "
-                                f"hồi về C {_d(fb['C'])} = {fb['do_sau']:.0%} biên độ → mức mở rộng {str(fb['ti_le']).replace('.', ',')} "
-                                f"(hồi ít thì lên nhiều): C + {str(fb['ti_le']).replace('.', ',')} × (B − A).")
+                fb["du_lai"] = fb["lai_pct"] >= LAI_TOI_THIEU
+                ten_song = {"M": "tháng", "W": "tuần", "D": "ngày"}[fb["khung"]]
+                tl = str(fb["ti_le"]).replace(".", ",")
+                fb["vi_sao"] = (f"Sóng {ten_song}: đáy A {_d(fb['A'])} ({fb['ngay_A']:%m/%Y}) → đỉnh B {_d(fb['B'])} ({fb['ngay_B']:%m/%Y}), "
+                                f"hồi về C {_d(fb['C'])} = {fb['do_sau']:.0%} biên độ → mục tiêu C + {tl} × (B − A).")
                 kh["fibo"] = fb
     except Exception:
         kh["fibo"] = None
     kh["tom_tat"] = (f"Mua ~{_d(kn.gia_mua)}, cắt lỗ {_d(kn.cat_lo)} ({kn.lo_pct:+.1%}), chốt lời {_d(kn.chot_loi1)} "
                      f"({kn.lai_pct:+.1%})" if kn.gia_mua and kn.cat_lo and kn.chot_loi1 and kn.lo_pct is not None else "")
     return kh
+
+
+LAI_FIBO_TL = 1.0       # cổ phiếu dài hạn: chỉ dùng mức Fibo 1,0 (không 1,618)
+LAI_TOI_THIEU = 0.10    # lãi dự kiến tới mức 1,0 dưới 10% → không vào lệnh
 
 
 def ap_pha(kn: KhuyenNghi, ck: dict | None) -> KhuyenNghi:

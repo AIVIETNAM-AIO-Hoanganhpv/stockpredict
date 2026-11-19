@@ -1023,9 +1023,14 @@ def the_ke_hoach(kq, kn, gt: dict, gon: bool = False):
                  + ("" if gon else f"<div style='font-size:12.5px;color:#64748b'>{ly}</div>") + "</div>")
     fb = gt.get("fibo")
     if fb:
-        html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>🎯 Chốt lời Fibonacci: {gd(fb['chot_loi'])} "
-                 f"({pt(fb['lai_pct'])})</b>" + ("" if gon else f"<div style='font-size:12.5px;color:#64748b'>{fb['vi_sao']} "
-                 "Vẫn bán sớm nếu có tín hiệu bán MACD+Sto hoặc chạm cắt lỗ. Đang kiểm định.</div>") + "</div>")
+        dai_han = fb["khung"] in ("W", "M")
+        nhan = ("🎯 Lãi dự kiến (Fibo 1,0)" if dai_han else "🎯 Chốt lời Fibonacci")
+        canh = ("" if not dai_han else (" ✅ ≥ 10%" if fb.get("du_lai") else " ⛔ dưới 10% → KHÔNG vào lệnh"))
+        giai = (" Không tự bán ở mức này: giữ đến khi khung THÁNG có tín hiệu bán MACD+Sto, hoặc chạm cắt lỗ."
+                if dai_han else " Vẫn bán sớm nếu có tín hiệu bán MACD+Sto hoặc chạm cắt lỗ.")
+        html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>{nhan}: {gd(fb['chot_loi'])} "
+                 f"({pt(fb['lai_pct'])}){canh}</b>" + ("" if gon else f"<div style='font-size:12.5px;color:#64748b'>{fb['vi_sao']}"
+                 f"{giai} Đang kiểm định.</div>") + "</div>")
     if gt.get("ngay_du_kien") is not None:
         kh = (f" (sớm {gt['ngay_som']:%d/%m} – muộn {gt['ngay_muon']:%d/%m/%Y})"
               if gt.get("ngay_som") is not None and gt.get("ngay_muon") is not None else "")
