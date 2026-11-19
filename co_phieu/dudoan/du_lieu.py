@@ -246,6 +246,16 @@ def danh_sach_ma_vn(san=("HSX", "HNX", "UPCOM"), lam_moi: bool = False) -> pd.Da
 _SAN_CUA: dict = {}
 
 
+def nganh_cua(ma: str) -> str | None:
+    """Ngành ICB cấp 2 của mã (từ du_lieu_ma/ma_vn.csv)."""
+    try:
+        b = pd.read_csv(FILE_MA, dtype=str)
+        x = b.loc[b["ma"].str.upper() == ma.upper(), "nganh"]
+        return x.iloc[0] if len(x) and isinstance(x.iloc[0], str) else None
+    except Exception:
+        return None
+
+
 def san_cua(ma: str) -> str:
     """Sàn niêm yết của mã VN (HSX / HNX / UPCOM), theo du_lieu_ma/ma_vn.csv; '' nếu không rõ."""
     if not _SAN_CUA and FILE_MA.exists():

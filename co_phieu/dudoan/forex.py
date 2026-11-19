@@ -186,3 +186,16 @@ def ke_hoach_cac_khung(kq, von_usd: float = 10_000, rui_ro_pct: float = 1.0, rui
         kh["tam_giu"] = TAM_GIU[k]
         ra.append(kh)
     return ra
+
+
+# Kết quả backtest 19/11/2026 (tài khoản 10.000 USD, rủi ro 1%/lệnh, 7 cặp chính + vàng + BTC, có spread, chưa swap)
+KIEM_DINH = {
+    "15m": ("−98% (60 ngày dữ liệu) – CHÁY TÀI KHOẢN: cắt lỗ quá sát, spread ăn mất lợi nhuận", True),
+    "1H": ("−98% (~2,8 năm) – CHÁY TÀI KHOẢN, không nên dùng", True),
+    "4H": ("+60% (~2,7 năm) nhưng chọn chiều ngẫu nhiên cũng +29% – lãi chủ yếu nhờ BTC/vàng tăng", False),
+    "D": ("+172% (1997–2026), chọn chiều ngẫu nhiên +168% – tín hiệu chưa hơn ngẫu nhiên", False),
+    "W": ("+6,5% (2000–2026), ngẫu nhiên −7%", False),
+    "M": ("+11% (2001–2026), ngẫu nhiên +6% – ít lệnh", False),
+}
+KIEM_DINH_L1 = ("LEVEL 1 (MA10/MA20 khung ngày): +26%, sụt giảm −20%, ổn định 2 nửa giai đoạn – tốt nhất trong "
+                "các công thức forex đã thử nhưng chưa chắc chắn (thử 10 tổ hợp).")

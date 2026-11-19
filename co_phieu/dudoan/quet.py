@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import co_ban, du_lieu, khuyen_nghi as K, mo_hinh, phan_tich
+from . import chu_ky, co_ban, du_lieu, khuyen_nghi as K, level1, mo_hinh, phan_tich
 
 
 @dataclass
@@ -238,11 +238,46 @@ def thong_ke(ket_qua: list[KetQuaMa]) -> dict:
             "ban": sum(bool(r.dinh) and r.dinh["D"].hang >= 2 for r in co)}
 
 
+CO_HANH_DONG = ("MUA LỆNH VỊ THẾ", "MUA LỆNH XÁC NHẬN", "BÁN 50%", "BÁN HẾT", "ĐÃ CẮT LỖ")
+
+
+def tin_hieu_level1(ket_qua: list[KetQuaMa], thi_truong_tot: bool, von: float = 1e9) -> list[dict]:
+    """Các mã có tín hiệu LEVEL 1 cần hành động ở phiên/tuần/tháng gần nhất (khung D, W, M)."""
+    ra = []
+    for r in ket_qua:
+        if r.kq is None or "D" not in r.kq.frames:
+            continue
+        for k in ("D", "W", "M"):
+            try:
+                t = level1.trang_thai(r.kq.frames["D"], k, von, thi_truong_tot)
+            except Exception:
+                continue
+            if t.get("co_lenh") and t["trang_thai"].startswith(CO_HANH_DONG):
+                ra.append({"Mã": r.ma, "Ngành": r.nganh, "Khung": k, "Tín hiệu": t["trang_thai"],
+                           "Giá": round(t["gia"], 0), "Giá vào": round(t["vao"], 0), "Cắt lỗ": round(t["cat_lo"], 0),
+                           "Nhịp": t["nhip"], "Đồng pha": t["dong_pha"], "CP vị thế (1 tỷ)": t["cp_vi_the"],
+                           "CP xác nhận (1 tỷ)": t.get("cp_xac_nhan"), "GTGD (tỷ)": _so(r.gtgd / 1e9, 1)})
+    return sorted(ra, key=lambda x: ("DWM".index(x["Khung"]), -(x["GTGD (tỷ)"] or 0)))
+
+
 def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
     """Ghi khuyen_nghi_D/W (.csv, .xlsx), khuyen_nghi.md và thi_truong.json (dùng cho trang demo)."""
     thu_muc = Path(thu_muc)
     thu_muc.mkdir(parents=True, exist_ok=True)
     luc = dt.datetime.now(dt.timezone(dt.timedelta(hours=7))).strftime("%d/%m/%Y %H:%M")
+    # chu kỳ thị trường (pha) + ngành mạnh + dài hạn → chu_ky.json; áp bộ lọc pha cho khuyến nghị mua
+    ck = {}
+    try:
+        ds = {r.ma: r.kq.frames["D"] for r in ket_qua if r.kq is not None and "D" in r.kq.frames}
+        ck = chu_ky.danh_gia(ds, {r.ma: r.nganh for r in ket_qua}, chu_ky.tai_tnx())
+        if ck:
+            ck["level1"] = tin_hieu_level1(ket_qua, ck.get("nen_cam_co_phieu", True))
+            (thu_muc / "chu_ky.json").write_text(json.dumps(ck, ensure_ascii=False), encoding="utf-8")
+            for r in ket_qua:
+                for kn in (r.kn or {}).values():
+                    K.ap_pha(kn, ck)
+    except Exception as e:
+        print("Không tính được chu kỳ thị trường:", e)
     bangs = {tam: bang(ket_qua, tam, von) for tam in ("D", "W")}
     bans = {tam: bang_ban(ket_qua, tam) for tam in ("D", "W")}
     nganhs = {tam: suc_manh_nganh(ket_qua, tam) for tam in ("D", "W")}
@@ -292,6 +327,7 @@ def ghi(thu_muc, ket_qua: list[KetQuaMa], von: float = 100e6) -> dict:
             d = r.kq.frames["D"].iloc[-120:]
             gia[r.ma] = {"t": [x.strftime("%d/%m") for x in d.index], "c": [round(v, 2) for v in d["close"]]}
     data = {"luc": luc, "thong_ke": tk, "von": von, "gia": gia,
+            "chu_ky": {k: v for k, v in ck.items() if k != "lich_su"},
             **{tam: json.loads(bangs[tam].to_json(orient="records", force_ascii=False)) for tam in ("D", "W")},
             **{f"ban_{tam}": json.loads(bans[tam].to_json(orient="records", force_ascii=False)) for tam in ("D", "W")},
             **{f"nganh_{tam}": json.loads(nganhs[tam].to_json(orient="records", force_ascii=False))

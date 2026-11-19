@@ -8,7 +8,8 @@ Tách từ repo `draft` (app luyện thi MOS) ngày 19/11/2026, giữ lịch s�
 - Máy người dùng: **Windows + Python (lệnh `py`)**. Môi trường cloud là Linux: không thử được `.bat`, TradingView,
   Streamlit Cloud → nói rõ khi báo kết quả.
 - Làm xong: chạy test, commit, push lên `main`. Người dùng tải bằng **Code → Download ZIP**.
-- Luôn nói thẳng kết quả kiểm định (backtest): tín hiệu hiện chưa vượt mua/bán ngẫu nhiên.
+- Luôn nói thẳng kết quả kiểm định (backtest): tín hiệu mua/bán từng mã chưa vượt ngẫu nhiên; chỉ LỌC PHA THỊ TRƯỜNG
+  (`dudoan/chu_ky.py`) thắng mua & giữ (+16%/năm vs +9,9%, 2020–2026). Chi tiết `co_phieu/nghien_cuu/`.
 
 ## Lệnh
 ```bash
@@ -38,6 +39,9 @@ python greenview/build.py                  # gộp greenview/src → greenview/d
 - Tin tức: `dudoan/tin_tuc.py` (Google News RSS + RSS CafeF/Vietstock/VnExpress); test dùng RSS mẫu trong `tests/du_lieu/`.
 - Bước giá: HOSE 10/50/100 đ, HNX/UPCoM 100 đ, chỉ số & ngoại tệ không làm tròn (`khuyen_nghi.loai_gia`).
 - Môi trường cloud `draft` cho phép Yahoo Finance và trading.vietcap.com.vn.
+
+- Pha thị trường `chu_ky.py` + `bao_cao/chu_ky.json` (bản quét ghi); LEVEL 1 `level1.py`; forex `forex.py` (pip/lot cBot).
+  Dữ liệu nghiên cứu (features_full.pkl…) nằm ở scratchpad, KHÔNG có trong repo.
 
 ## greenview/
 - Mã nguồn trong `greenview/src` (JS thuần, Lightweight Charts). `build.py` gộp thành 1 file `dist/GreenView.html`.

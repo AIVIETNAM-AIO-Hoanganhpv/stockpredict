@@ -17,7 +17,7 @@ import streamlit.components.v1 as components
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, co_ban as CB, du_lieu, forex as FX, greenview as G, mo_hinh as MH, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
+from dudoan import bao_cao, chu_ky as CK, co_ban as CB, du_lieu, forex as FX, level1 as L1, greenview as G, mo_hinh as MH, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -221,15 +221,15 @@ def quet_ngay(kho, san, gtgd_min):
     def tt(i, n, ma):
         thanh.progress(i / n, text=f"Đang quét {i}/{n} mã ({ma})")
     kq = quet.quet(san=tuple(san), gtgd_min=gtgd_min, tien_trinh=tt)
+    try:
+        quet.ghi(BAO_CAO, kq)            # lưu bản của ngày + tính pha thị trường (áp bộ lọc pha trước khi lập bảng)
+    except Exception:
+        pass
     kho.update(luc=pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").strftime("%H:%M %d/%m/%Y"), ts=time.time(),
                thong_ke=quet.thong_ke(kq),
                **{t: quet.bang(kq, t) for t in ("D", "W")},
                **{f"ban_{t}": quet.bang_ban(kq, t) for t in ("D", "W")},
                **{f"nganh_{t}": quet.suc_manh_nganh(kq, t) for t in ("D", "W")})
-    try:
-        quet.ghi(BAO_CAO, kq)            # cũng lưu bản khuyến nghị của ngày (tab "Theo ngày")
-    except Exception:
-        pass
     thanh.empty()
 
 
@@ -550,6 +550,8 @@ with st.expander("⚙ Cài đặt chung", expanded=False):
     fx_rr = c2.number_input("Rủi ro mỗi lệnh (%)", min_value=0.1, max_value=10.0, value=1.0, step=0.1, key="fx_rr")
     fx_max = c3.number_input("Rủi ro tối đa ($, 0 = không giới hạn)", min_value=0.0, value=0.0, step=10.0,
                              key="fx_max")
+    tk_ck = st.number_input("Tài khoản chứng khoán cho công thức LEVEL 1 (đồng)", min_value=10_000_000,
+                            value=1_000_000_000, step=50_000_000, format="%d", key="tk_ck")
 tam = TAM[tam_nhan]
 
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
@@ -1096,7 +1098,8 @@ def the_forex(kq):
                         "Cắt lỗ": so_fx(x["cat_lo"], ts_) if co else (f"HT {so_fx(x['ho_tro'], ts_)}" if x.get("ho_tro") else "–"),
                         "Chốt lời": so_fx(x["chot_loi"], ts_) if co else (f"KC {so_fx(x['khang_cu'], ts_)}" if x.get("khang_cu") else "–"),
                         "SL pip": round(x["sl_pip"], 1) if co else None, "Lot": x["lot"] if co else None,
-                        "Lãi $": round(x["lai_usd"], 2) if co else None, "Lỗ $": round(x["lo_usd"], 2) if co else None})
+                        "Lãi $": round(x["lai_usd"], 2) if co else None, "Lỗ $": round(x["lo_usd"], 2) if co else None,
+                        "Kiểm định (10.000 USD)": FX.KIEM_DINH.get(x["khung"], ("–", False))[0]})
     st.markdown("##### Điểm mua / bán theo từng khung")
     st.dataframe(pd.DataFrame(bang_fx), hide_index=True, width="stretch")
     dong_y = {x["huong"] for x in ds if x.get("huong")}
@@ -1107,6 +1110,17 @@ def the_forex(kq):
                       index=[x["khung"] for x in ds].index("4H") if any(x["khung"] == "4H" for x in ds) else 0,
                       horizontal=True, key=f"fx_khung_{kq.ma}")
     k = next(x for x in ds if x["khung"] == chon_k)
+    kd, chay = FX.KIEM_DINH.get(chon_k, ("", False))
+    if chay:
+        st.error(f"⚠ Khung {ten.get(chon_k, chon_k)}: backtest {kd}. Không nên giao dịch theo khung này.")
+    try:
+        l1 = L1.trang_thai(kq.frames["D"], "D", cap=(10, 20)) if "D" in kq.frames else None
+    except Exception:
+        l1 = None
+    if l1:
+        st.info(f"📘 LEVEL 1 (MA10/MA20 khung ngày): **{l1['trang_thai']}**"
+                + (f" · vào {so_fx(l1['vao'], FX.thong_so(kq.ma))}, cắt lỗ {so_fx(l1['cat_lo'], FX.thong_so(kq.ma))}"
+                   if l1.get("co_lenh") else "") + f". {FX.KIEM_DINH_L1}")
     if not k.get("huong"):
         st.markdown(f"<div style='padding:14px 16px;border-radius:14px;background:#64748b;color:white'>"
                     f"<div style='font-size:14px;opacity:.9'>{kq.ma} · khung {k.get('khung', '')}</div>"
@@ -1164,8 +1178,12 @@ def xem_ma(ma: str, noi: str):
             CB.dieu_chinh_khuyen_nghi(kn, CB.tom_tat_co_ban(kq.ma, kq.frames.get("D")))
         except Exception:
             pass
+        ck = chu_ky_nay()
+        K.ap_pha(kn, ck)
         dinh = K.tin_hieu_dinh(kq, tam)
         the_ket_luan(kq, kn, dinh, None, K.giai_thich(kq, kn, von), diem_mh(kq.ma))
+        the_level1(kq, ck)
+        the_dai_han(kq, ck)
         if st.toggle("🔎 Kiểm tra các lần công cụ báo Mua mã này trước đây (~5 giây)", key=f"tc_{noi}_{kq.ma}"):
             try:
                 with st.spinner("Đang mô phỏng lại các lần báo Mua trong ~2 năm…"):
@@ -1234,6 +1252,117 @@ def thi_truong_chung():
     return kq
 
 
+def chu_ky_nay() -> dict:
+    """Pha thị trường do bản quét hằng ngày tính (bao_cao/chu_ky.json)."""
+    f = BAO_CAO / "chu_ky.json"
+    return _doc_ck(str(f), f.stat().st_mtime if f.exists() else 0)
+
+
+@st.cache_data(show_spinner=False)
+def _doc_ck(duong_dan, mtime):
+    return CK.doc(Path(duong_dan).parent)
+
+
+def bieu_do_pha(ck, cao=260):
+    import plotly.graph_objects as go
+    ls = ck.get("lich_su") or []
+    if len(ls) < 30:
+        return None
+    t = pd.to_datetime([x["t"] for x in ls])
+    fig = go.Figure(go.Scatter(x=t, y=[x["I"] for x in ls], line=dict(color="#0f172a", width=1.6), name="Chỉ số"))
+    i = 0
+    while i < len(ls):
+        j = i
+        while j + 1 < len(ls) and ls[j + 1]["pha"] == ls[i]["pha"]:
+            j += 1
+        fig.add_vrect(x0=t[i], x1=t[min(j + 1, len(ls) - 1)], fillcolor=CK.MAU_PHA.get(ls[i]["pha"], "#ccc"),
+                      opacity=0.35, line_width=0, layer="below")
+        i = j + 1
+    for ten, mau in CK.MAU_PHA.items():
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", marker=dict(size=10, color=mau, symbol="square"),
+                                 name=ten))
+    fig.update_layout(height=cao, margin=dict(l=6, r=6, t=26, b=6), template="plotly_white",
+                      title="Chỉ số TB mã thanh khoản theo pha",
+                      legend=dict(orientation="h", y=-0.15), yaxis=dict(showticklabels=False))
+    return fig
+
+
+def the_pha(ck):
+    pha = ck.get("pha", "?")
+    mau = CK.MAU_PHA.get(pha, "#64748b")
+    tot = ck.get("nen_cam_co_phieu")
+    st.markdown(
+        f"<div style='padding:12px 14px;border-radius:12px;border:3px solid {mau}'>"
+        f"<div style='font-size:13px;color:#64748b'>Chu kỳ thị trường · cập nhật {ck.get('ngay', '')}</div>"
+        f"<div style='font-size:24px;font-weight:800;color:{'#15803d' if tot else '#b91c1c'}'>PHA {pha.upper()}"
+        f" → {'CẦM CỔ PHIẾU' if tot else 'GIỮ TIỀN MẶT'}</div>"
+        f"<div>{ck.get('loi_khuyen', '')}</div>"
+        f"<div style='font-size:13px;color:#475569'>Từ {pd.Timestamp(ck['tu_ngay']):%d/%m/%Y} · "
+        f"{(ck.get('do_rong_ma50') or 0):.0%} mã trên MA50 · 2 ngành mạnh nhất: "
+        f"<b>{', '.join(ck.get('nganh_top2') or ['–'])}</b></div></div>", unsafe_allow_html=True)
+    fig = bieu_do_pha(ck)
+    if fig is not None:
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="bd_pha")
+    st.caption(ck.get("kiem_dinh", "") + " Khi thị trường không ở pha tốt, mọi mã 'Mua' chuyển thành 'Theo dõi – chờ'.")
+
+
+def the_level1(kq, ck):
+    """Bảng LEVEL 1 cho 1 mã: khung D / W / M."""
+    df = kq.frames.get("D")
+    if df is None or len(df) < 60:
+        return
+    tot = (ck or {}).get("nen_cam_co_phieu", True)
+    rows = []
+    for k in ("D", "W", "M"):
+        try:
+            t = L1.trang_thai(df, k, tk_ck, tot)
+        except Exception:
+            continue
+        rows.append({"Khung": t.get("ten_khung", k), "Tín hiệu": t["trang_thai"], "Cặp MA": t.get("cap_ma"),
+                     "Giá vào": t.get("vao"), "Cắt lỗ": t.get("cat_lo"), "CP lệnh vị thế": t.get("cp_vi_the"),
+                     "Vào xác nhận": t.get("vao_xn"), "Cắt lỗ xác nhận": t.get("cat_lo_xn"),
+                     "CP xác nhận": t.get("cp_xac_nhan"), "Nhịp": t.get("nhip"),
+                     "Đồng pha": ("✔" if t.get("dong_pha") else "✖") if t.get("co_lenh") else "",
+                     "Kiểm định": t.get("kiem_dinh")})
+    if not rows:
+        return
+    with st.expander("📘 Theo công thức LEVEL 1 (khung ngày / tuần / tháng)", expanded=False):
+        st.dataframe(pd.DataFrame(rows).style.format(
+            {c: "{:,.0f}" for c in ("Giá vào", "Cắt lỗ", "CP lệnh vị thế", "Vào xác nhận", "Cắt lỗ xác nhận",
+                                    "CP xác nhận")}, na_rep="–"), hide_index=True, width="stretch")
+        st.caption(f"Tài khoản {trieu(tk_ck)} (đổi ở ⚙). Lệnh vị thế = 30%, lệnh xác nhận = 70% tiền chấp nhận cắt lỗ "
+                   "(D 5% · W 12% · M 12% tài khoản, chia 10 mã, nhân hệ số nhịp). Bán 50% khi nến đóng dưới MA điều kiện, "
+                   "bán hết khi MA tín hiệu cắt xuống. Kiểm định 2020–2026 (vốn 1 tỷ): D +4,0%, W +2,6%, M +5,2%/năm, "
+                   "cả 3 khung +6,7%/năm – THẤP HƠN mua & giữ (+9,9%) và lọc pha thị trường (+16%).")
+
+
+def the_dai_han(kq, ck):
+    df = kq.frames.get("D")
+    x = CK.dai_han_ma(df)
+    if not x.get("du_lieu"):
+        return
+    ng = None
+    try:
+        ng = du_lieu.nganh_cua(kq.ma)
+    except Exception:
+        pass
+    top = (ck or {}).get("nganh_top2") or []
+    tot = (ck or {}).get("nen_cam_co_phieu")
+    dk = []
+    if ck:
+        dk.append(("✔" if tot else "✖") + f" thị trường pha {ck.get('pha')}")
+        if ng:
+            dk.append(("✔" if ng in top else "✖") + f" ngành {ng} " + ("nằm trong" if ng in top else "ngoài") + " 2 ngành mạnh")
+    dk.append(("✔" if x["tren_ma10"] else "✖") + f" giá tháng {x['thang']} {gd(x['dong_cua_thang'])} "
+              + ("trên" if x["tren_ma10"] else "dưới") + f" MA10 tháng {gd(x['ma10_thang'])}")
+    mua = bool(tot) and ng in top and x["tren_ma10"]
+    with st.expander(f"🕰 Dài hạn (9–24 tháng): {'ĐỦ ĐIỀU KIỆN MUA cuối tháng' if mua else x['trang_thai']}"):
+        st.markdown("  \n".join(dk))
+        st.caption("Quy tắc dài hạn đã kiểm định (2020–2026: +14,7%/năm, sụt giảm −30%, ít mẫu): mua cuối tháng khi "
+                   "thị trường pha tốt và mã thuộc 2 ngành mạnh nhất; bán khi giá đóng cửa tháng dưới MA10 tháng hoặc "
+                   "sau 12 tháng. Thực tế thường giữ ~5 tháng.")
+
+
 def trang_hom_nay():
     kho = kho_thi_truong()
     doc_file_thi_truong(kho)
@@ -1242,7 +1371,10 @@ def trang_hom_nay():
         vni = thi_truong_chung()
     except Exception:
         vni = None
-    if vni is not None and vni.khung:
+    ck = chu_ky_nay()
+    if ck:
+        the_pha(ck)
+    elif vni is not None and vni.khung:
         loi_khuyen = {1: "có thể giải ngân dần vào mã tốt", 0: "giải ngân thận trọng, ưu tiên mã thật mạnh",
                       -1: "nên giữ nhiều tiền mặt, hạn chế mua mới"}[vni.xu_huong]
         st.markdown(f"<div style='padding:10px 14px;border-radius:12px;border:2px solid {MAU[vni.xu_huong]}'>"
@@ -1264,7 +1396,7 @@ def trang_hom_nay():
         for _, r in ung_vien.iterrows():
             try:      # phân tích lại theo giá mới nhất để thẻ khớp với trang Tra cứu
                 kq_r, _, _ = phan_tich(r["Mã"], False)
-                kn_r = K.khuyen_nghi(kq_r, tam)
+                kn_r = K.ap_pha(K.khuyen_nghi(kq_r, tam), chu_ky_nay())
                 the.append((r, kq_r, kn_r, K.giai_thich(kq_r, kn_r, von), kn_r.muc, kn_r.gia))
             except Exception:
                 the.append((r, None, None, None, r["Khuyến nghị"], r["Giá"]))
@@ -1292,6 +1424,21 @@ def trang_hom_nay():
         st.caption("Luôn hiện 5 mã điểm cao nhất (theo bản quét) kể cả khi chưa đủ điều kiện mua – khi đó kế hoạch ghi "
                    "\"THAM KHẢO – CHƯA VÀO\". 🤖 = điểm mô hình học máy (thử nghiệm). "
                    + cau_tin_cay(None).replace("**", ""))
+        if ck and ck.get("level1"):
+            with st.expander(f"📘 Tín hiệu LEVEL 1 toàn thị trường ({len(ck['level1'])})"):
+                st.caption("Công thức 2 đường MA của LEVEL 1. Số cổ phiếu tính cho tài khoản 1 tỷ, chia 10 mã. "
+                           "Kiểm định 2020–2026: D +4,0%, W +2,6%, M +5,2%/năm – thấp hơn mua & giữ (+9,9%).")
+                st.dataframe(pd.DataFrame(ck["level1"]), hide_index=True, width="stretch", height=320)
+        if ck:
+            with st.expander("🕰 Dài hạn (giữ 9–12 tháng, tối đa 24 tháng)"):
+                st.markdown("**Quy tắc (đã kiểm định, 2020–2026: +14,7%/năm, sụt giảm −30%):** cuối mỗi tháng, khi thị "
+                            "trường ở pha tốt, mua mã thanh khoản thuộc **2 ngành mạnh nhất** (tối đa 10 mã × 10% vốn); "
+                            "bán khi **giá đóng cửa tháng dưới MA10 tháng** hoặc sau 12 tháng.")
+                if ck.get("dai_han"):
+                    st.dataframe(pd.DataFrame(ck["dai_han"]), hide_index=True, width="stretch")
+                else:
+                    st.info("Hiện thị trường chưa ở pha tốt → chưa mua mới dài hạn. Mã đang giữ: kiểm tra giá tháng "
+                            "so với MA10 tháng ở trang Tra cứu.")
         ban = kho.get(f"ban_{tam}")
         if ban is not None and not ban.empty:
             manh = ban[ban["Tín hiệu"] == "Bán mạnh"]

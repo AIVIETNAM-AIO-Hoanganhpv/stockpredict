@@ -593,6 +593,8 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
             thieu.append(f"điểm lên ≥ {NGUONG_MUA:.0f} (đang {kn.diem:+.0f})")
         if not (lon and lon.xu_huong == 1):
             thieu.append(f"khung {lon_ten} chuyển sang tăng")
+        if getattr(kn, "muc_goc", None):
+            thieu.insert(0, "thị trường chung chuyển sang pha tốt (Tích luỹ/Tăng)")
         dieu_kien = "Chỉ vào khi: " + (", ".join(thieu) or "tín hiệu xác nhận") + "."
     kh = {"vao_lenh": vao, "trang_thai": "VÀO LỆNH" if vao else "THAM KHẢO – CHƯA VÀO", "dieu_kien": dieu_kien,
           "gia": kn.gia, "gia_mua": kn.gia_mua, "cat_lo": kn.cat_lo, "chot_loi": kn.chot_loi1,
@@ -654,3 +656,15 @@ def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 1
     kh["tom_tat"] = (f"Mua ~{_d(kn.gia_mua)}, cắt lỗ {_d(kn.cat_lo)} ({kn.lo_pct:+.1%}), chốt lời {_d(kn.chot_loi1)} "
                      f"({kn.lai_pct:+.1%})" if kn.gia_mua and kn.cat_lo and kn.chot_loi1 and kn.lo_pct is not None else "")
     return kh
+
+
+def ap_pha(kn: KhuyenNghi, ck: dict | None) -> KhuyenNghi:
+    """Bộ lọc pha thị trường (đã kiểm định, xem chu_ky.py): thị trường không ở pha tốt → mã đang 'Mua' / 'Gần đủ
+    điều kiện' chuyển sang 'Theo dõi' (chờ). Giữ nguyên giá mua/cắt lỗ/chốt lời để tham khảo."""
+    if not ck or ck.get("nen_cam_co_phieu", True) or kn.muc not in ("Mua", "Gần đủ điều kiện"):
+        return kn
+    kn.muc_goc = kn.muc
+    kn.muc = "Theo dõi"
+    kn.ly_do.append(f"Thị trường chung đang pha {ck.get('pha', '?').upper()} → CHỜ, chưa mua mới "
+                    f"(tín hiệu mã: {kn.muc_goc}).")
+    return kn

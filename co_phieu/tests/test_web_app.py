@@ -37,7 +37,7 @@ def test_tra_cuu_va_danh_sach(gia_gia):
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
     assert not at.exception, at.exception
     md = " ".join(m.value for m in at.markdown)
-    assert "FPT" in md and ("Tăng" in md or "Giảm" in md or "Đi ngang" in md)
+    assert "FPT" in md and any(x in md.lower() for x in ("tăng", "giảm", "đi ngang"))
     assert {"🏠 Hôm nay", "🔍 Tra cứu mã", "💼 Danh mục của tôi", "🧰 Nâng cao"} <= {t.label for t in at.tabs}
     assert any(x in md for x in ("NÊN MUA", "KHÔNG MUA", "CHỜ", "CHƯA NÊN MUA"))   # thẻ kết luận rõ ràng
     at.toggle(key="td_bat").set_value(True).run()       # danh sách theo dõi chỉ chạy khi bật

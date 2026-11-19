@@ -2428,6 +2428,29 @@ window.App = window.App || {};
     }
   };
 
+  /* ---------------- Chỉ báo: Pha thị trường (chu kỳ) ---------------- */
+  DEFS.sp_pha = {
+    id: 'sp_pha', name: 'Pha thị trường VN (chu kỳ)', cat: 'stockpredict', overlay: true, plots: [], levels: [],
+    inputs: [['op', 'Độ đậm nền (%)', 18, 'int']],
+    calc(D, I) {
+      const P = window.GV_PHA || [];
+      if (!P.length) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Chưa có dữ liệu pha – chạy quét toàn thị trường trong StockPredict', '#787b86'); } };
+      const seg = [];
+      P.forEach(([t, pha, mau]) => {
+        const ts = Date.parse(t) / 1000, i = idx(D, ts); if (i < 0) return;
+        const s = seg[seg.length - 1];
+        if (s && s.pha === pha) s.j = i; else seg.push({ i, j: i, pha, mau });
+      });
+      const a = Math.max(0, Math.min(100, I.op)) / 100, hex = c => { const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+      const cuoi = P[P.length - 1];
+      return { draw(g, X) {
+        const nua = Math.abs((X.x(1) || 0) - (X.x(0) || 0)) / 2;   // nửa độ rộng 1 nến (toạ độ số lẻ không dùng được)
+        seg.forEach(s => { const a1 = X.x(s.i), a2 = X.x(s.j); if (a1 == null || a2 == null) return; X.box(g, a1 - nua, 0, a2 + nua, X.H, hex(s.mau)); });
+        X.label(g, Math.min(X.W - 120, Math.max(120, X.W / 2)), 40, `Thị trường: pha ${cuoi[1]}`, cuoi[2]);
+      } };
+    }
+  };
+
   /* ---------------- Chỉ báo: Đỉnh/đáy thật (để so với tín hiệu) ---------------- */
   // Đỉnh/đáy "thật" = điểm cao/thấp nhất trong ±N nến VÀ cách đáy/đỉnh trước ≥ X% (zigzag).
   // Chỉ dùng để NHÌN LẠI QUÁ KHỨ: điểm gần cuối biểu đồ chưa được xác nhận (cần N nến sau đó).
@@ -3934,7 +3957,7 @@ window.App = window.App || {};
       else if (cur === 'pattern') {
         h = '<div class="isec">Mô hình biểu đồ</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'chart').map(row).join('')
           + '<div class="isec">Mô hình nến</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'candle').sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
-      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_dinh_day', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
+      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dinh_day', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
       else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
       else h = all.filter(d => d.cat === cur).sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
       $('#iList').innerHTML = h;
@@ -4664,7 +4687,7 @@ window.App = window.App || {};
     // Connector của Claude (chỉ có khi mở trong Claude) — chờ tối đa ~10 giây
     App.mcpReady = (async () => { try { if (window.claude && window.claude.use) App.mcp = await window.claude.use('mcp'); } catch (e) { App.mcp = null; } return App.mcp; })();
     // Mở từ StockPredict: dữ liệu nhúng sẵn (web app) hoặc máy chủ giá trên máy (chay_greenview.bat)
-    const spAuto = () => { if (!App.chart.inds.some(x => x.id === 'sp_plan')) App.chart.addIndicator('sp_plan'); };
+    const spAuto = () => { ['sp_plan', 'sp_pha'].forEach(id => { if ((id !== 'sp_pha' || window.GV_PHA) && !App.chart.inds.some(x => x.id === id)) App.chart.addIndicator(id); }); };
     if (window.GV_DATA && window.GV_DATA.bars) {
       if (await App.loadSymbol('SP', window.GV_DATA.ma, '1D', { quiet: true, fallback: true })) { spAuto(); App.panels.refreshQuotes(); return; }
     }

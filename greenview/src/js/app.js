@@ -97,7 +97,7 @@
     // Connector của Claude (chỉ có khi mở trong Claude) — chờ tối đa ~10 giây
     App.mcpReady = (async () => { try { if (window.claude && window.claude.use) App.mcp = await window.claude.use('mcp'); } catch (e) { App.mcp = null; } return App.mcp; })();
     // Mở từ StockPredict: dữ liệu nhúng sẵn (web app) hoặc máy chủ giá trên máy (chay_greenview.bat)
-    const spAuto = () => { if (!App.chart.inds.some(x => x.id === 'sp_plan')) App.chart.addIndicator('sp_plan'); };
+    const spAuto = () => { ['sp_plan', 'sp_pha'].forEach(id => { if ((id !== 'sp_pha' || window.GV_PHA) && !App.chart.inds.some(x => x.id === id)) App.chart.addIndicator(id); }); };
     if (window.GV_DATA && window.GV_DATA.bars) {
       if (await App.loadSymbol('SP', window.GV_DATA.ma, '1D', { quiet: true, fallback: true })) { spAuto(); App.panels.refreshQuotes(); return; }
     }

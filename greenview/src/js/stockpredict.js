@@ -171,6 +171,29 @@
     }
   };
 
+  /* ---------------- Chỉ báo: Pha thị trường (chu kỳ) ---------------- */
+  DEFS.sp_pha = {
+    id: 'sp_pha', name: 'Pha thị trường VN (chu kỳ)', cat: 'stockpredict', overlay: true, plots: [], levels: [],
+    inputs: [['op', 'Độ đậm nền (%)', 18, 'int']],
+    calc(D, I) {
+      const P = window.GV_PHA || [];
+      if (!P.length) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Chưa có dữ liệu pha – chạy quét toàn thị trường trong StockPredict', '#787b86'); } };
+      const seg = [];
+      P.forEach(([t, pha, mau]) => {
+        const ts = Date.parse(t) / 1000, i = idx(D, ts); if (i < 0) return;
+        const s = seg[seg.length - 1];
+        if (s && s.pha === pha) s.j = i; else seg.push({ i, j: i, pha, mau });
+      });
+      const a = Math.max(0, Math.min(100, I.op)) / 100, hex = c => { const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+      const cuoi = P[P.length - 1];
+      return { draw(g, X) {
+        const nua = Math.abs((X.x(1) || 0) - (X.x(0) || 0)) / 2;   // nửa độ rộng 1 nến (toạ độ số lẻ không dùng được)
+        seg.forEach(s => { const a1 = X.x(s.i), a2 = X.x(s.j); if (a1 == null || a2 == null) return; X.box(g, a1 - nua, 0, a2 + nua, X.H, hex(s.mau)); });
+        X.label(g, Math.min(X.W - 120, Math.max(120, X.W / 2)), 40, `Thị trường: pha ${cuoi[1]}`, cuoi[2]);
+      } };
+    }
+  };
+
   /* ---------------- Chỉ báo: Đỉnh/đáy thật (để so với tín hiệu) ---------------- */
   // Đỉnh/đáy "thật" = điểm cao/thấp nhất trong ±N nến VÀ cách đáy/đỉnh trước ≥ X% (zigzag).
   // Chỉ dùng để NHÌN LẠI QUÁ KHỨ: điểm gần cuối biểu đồ chưa được xác nhận (cần N nến sau đó).

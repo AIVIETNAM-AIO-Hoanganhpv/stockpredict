@@ -164,10 +164,22 @@ def khoa_twelvedata() -> str:
     return k if k.isalnum() else ""
 
 
+def _pha_thi_truong() -> list:
+    """Lịch sử pha thị trường từ bản quét gần nhất (bao_cao/chu_ky.json): [[ngày, pha, màu], ...]."""
+    import os
+    from . import chu_ky
+    thu_muc = Path(os.environ.get("CO_PHIEU_BAO_CAO", GOC / "co_phieu" / "bao_cao"))
+    ck = chu_ky.doc(thu_muc)
+    return [[x["t"], x["pha"], chu_ky.MAU_PHA.get(x["pha"], "#999")] for x in ck.get("lich_su", [])]
+
+
 def html_nhung(du_lieu_goi: dict | None = None, api: str | None = None, td_key: str | None = None) -> str:
     """GreenView kèm dữ liệu (`window.GV_DATA`), địa chỉ máy chủ giá (`window.GV_API`) và key Twelve Data."""
     html = FILE_GV.read_text(encoding="utf-8")
     cau_hinh = "<script>"
+    pha = _pha_thi_truong()
+    if pha:
+        cau_hinh += "window.GV_PHA=" + json.dumps(pha, ensure_ascii=False).replace("</", "<\\/") + ";"
     k = khoa_twelvedata() if td_key is None else td_key
     if k:
         cau_hinh += "window.GV_TD_KEY=" + json.dumps(k) + ";"

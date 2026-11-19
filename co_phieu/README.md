@@ -252,3 +252,25 @@ mỗi 20 phiên so với mua đều mọi mã thanh khoản:
 - Mô hình học máy: **≈ +1%/20 phiên**, dương cả 7 năm nhưng bằng chứng YẾU (t ≈ 1,7–2,1; lợi thế chủ yếu ở mã nhỏ;
   từng mã riêng chỉ thắng ~50% – cần đa dạng ≥ 10 mã; đã thử ~30 biến thể nên có thể do may).
 → Chỉ hiện như một cột tham khảo, KHÔNG dùng để ra quyết định mua. Theo dõi thêm vài tháng để tự kiểm tra.
+
+## Kết quả backtest 19/11/2026 (vốn 1 tỷ đồng / 10.000 USD, chọn tham số 2008–2019, kiểm tra 1 lần 2020–2026)
+| Cách | Lãi/năm | Sụt giảm tối đa |
+|---|---|---|
+| **Lọc pha thị trường + mua đều mã thanh khoản** (đang dùng trong app) | **+16,0%** | **−22%** |
+| Lọc pha + 2 ngành mạnh nhất | +19,5% (kém ổn định) | −23% |
+| Dài hạn: 2 ngành mạnh khi pha tốt, bán khi giá tháng < MA10 tháng | +14,7% | −30% |
+| Mua & giữ đều các mã thanh khoản | +9,9% | −60% |
+| LEVEL 1 (D+W+M) | +6,7% | −35% |
+| Tuần/tháng, cắt lỗ sát, R:R 1:10–1:30 | −1,3% | −43% |
+| Quy tắc mua cũ (không lọc pha) | −3,0% | −58% |
+| Forex kế hoạch app: 15m/1H | −98% (cháy tài khoản) | |
+| Forex 4H/D/W/M | không hơn chọn chiều ngẫu nhiên | |
+
+Chi tiết: thư mục `nghien_cuu/` (`*_RESULT.md`, `*_SPEC.md`). Không cách chốt lời nào (biên độ, Fibo, timing, Stoch, MACD,
+bán dần) tốt hơn cách đơn giản; mọi cách đều bán thấp hơn đỉnh thật 10–25%. Dữ liệu thiếu mã đã huỷ niêm yết → mọi con số
+đều đẹp hơn thực tế. Lãi suất VN chưa có dữ liệu lịch sử (dùng lãi suất Mỹ, tỷ giá thay thế).
+
+- Pha thị trường: `dudoan/chu_ky.py` (tính trong bản quét hằng ngày → `bao_cao/chu_ky.json`); khi pha xấu mọi mã "Mua"
+  chuyển thành "Theo dõi – chờ" (`khuyen_nghi.ap_pha`).
+- LEVEL 1: `dudoan/level1.py` (D/W/M, lệnh vị thế 30% / xác nhận 70%, bán 50% khi đóng dưới MA điều kiện).
+- Forex: `dudoan/forex.py` (lot theo công thức cBot, `KIEM_DINH` cho từng khung).
