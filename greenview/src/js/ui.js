@@ -326,7 +326,7 @@
       else if (cur === 'pattern') {
         h = '<div class="isec">Mô hình biểu đồ</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'chart').map(row).join('')
           + '<div class="isec">Mô hình nến</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'candle').sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
-      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dinh_day', 'st_level1', 'st_macdsto', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
+      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dong_pha', 'sp_dinh_day', 'st_dongpha', 'st_level1', 'st_macdsto', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
       else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
       else h = all.filter(d => d.cat === cur).sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
       $('#iList').innerHTML = h;

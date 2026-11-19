@@ -2754,6 +2754,103 @@ window.App = window.App || {};
     }
   };
 
+
+  /* ======================================================================
+   * Khoá học — ĐỒNG PHA NGÀY/TUẦN/THÁNG: vào lệnh theo khung NGÀY khi ngày, tuần, tháng cùng TĂNG;
+   * giữ & bán theo tín hiệu bán MACD + Sto của khung TUẦN (lệnh tuần) hoặc THÁNG (lệnh tháng).
+   * Một khung "TĂNG" khi đủ 3 điều kiện: đỉnh/đáy sau cao hơn đỉnh/đáy trước · MACD trên đường tín hiệu ·
+   * Sto dài (13-13-5) %K trên %D. (MA 80% và Heikin Ashi chỉ để tham khảo.)
+   * ====================================================================== */
+  function xuHuongTang(D, k) {
+    // mảng true/false: khung (D là nến của khung đó) đang TĂNG tại từng nến
+    const n = D.n, m = T.sub(T.ema(D.c, 12), T.ema(D.c, 26)), sg = T.ema(m, 9);
+    const K = T.sma(T.stoch(D.c, D.h, D.l, 13), 13), Dd = T.sma(K, 5), up = new Array(n).fill(false);
+    let h1 = N, h2 = N, l1 = N, l2 = N;
+    for (let i = 0; i < n; i++) {
+      const p = i - k;                     // đỉnh/đáy chỉ được xác nhận sau k nến
+      if (p >= k) {
+        let isH = true, isL = true;
+        for (let q = p - k; q <= p + k; q++) { if (q === p) continue; if (D.h[q] > D.h[p]) isH = false; if (D.l[q] < D.l[p]) isL = false; }
+        if (isH) { h2 = h1; h1 = D.h[p]; }
+        if (isL) { l2 = l1; l1 = D.l[p]; }
+      }
+      const caoDan = isN(h2) && isN(l2) && h1 > h2 && l1 > l2;
+      up[i] = caoDan && m[i] > sg[i] && K[i] > Dd[i];
+    }
+    return up;
+  }
+  // nến tuần/tháng dựng từ nến ngày + chỉ số nến ngày cuối của mỗi nến lớn (nến lớn cuối cùng có thể chưa xong)
+  function khungLonTuNgay(D, loai) {
+    const bars = []; for (let i = 0; i < D.n; i++) bars.push({ time: D.t[i], open: D.o[i], high: D.h[i], low: D.l[i], close: D.c[i], volume: D.v[i] });
+    const big = loai === 'W' ? App.aggregate(bars, 604800) : App.aggregateMonth(bars), B = T.prep(big);
+    const cuoi = new Array(B.n).fill(-1); let w = 0;
+    for (let i = 0; i < D.n; i++) { while (w + 1 < B.n && B.t[w + 1] <= D.t[i]) w++; cuoi[w] = i; }
+    return { B, cuoi };
+  }
+  App.dongPha = function (D) {
+    const upD = xuHuongTang(D, 3), W = khungLonTuNgay(D, 'W'), M = khungLonTuNgay(D, 'M');
+    const upW = xuHuongTang(W.B, 2), upM = xuHuongTang(M.B, 2);
+    // trạng thái tuần/tháng tại ngày i = nến tuần/tháng ĐÃ XONG gần nhất (nến cuối của dữ liệu coi như chưa xong)
+    const theoNgay = (X, up) => { const out = new Array(D.n).fill(false); let j = -1;
+      for (let i = 0; i < D.n; i++) { while (j + 1 < X.B.n - 1 && X.cuoi[j + 1] <= i) j++; out[i] = j >= 0 && X.cuoi[j] <= i ? up[j] : false; } return out; };
+    const tW = theoNgay(W, upW), tM = theoNgay(M, upM);
+    // tín hiệu bán MACD + Sto trên nến tuần/tháng, thực hiện sau khi nến đó đóng (ngày cuối của nến)
+    const banTai = X => { const S = App.macdSto(X.B), out = new Array(D.n).fill(false);
+      for (let j = 0; j < X.B.n - 1; j++) if (S.Ban[j] && X.cuoi[j] >= 0) out[X.cuoi[j]] = true; return out; };
+    return { upD, tW, tM, dongPha: upD.map((x, i) => x && tW[i] && tM[i]), banW: banTai(W), banM: banTai(M),
+      cuoi: { D: upD[D.n - 1], W: upW[W.B.n - 2] ?? false, M: upM[M.B.n - 2] ?? false } };
+  };
+
+  DEFS.sp_dong_pha = {
+    id: 'sp_dong_pha', name: 'Đồng pha Ngày / Tuần / Tháng', cat: 'stockpredict', overlay: true, plots: [], levels: [],
+    inputs: [['op', 'Độ đậm nền (%)', 14, 'int']],
+    calc(D, I) {
+      if ((App.TF[App.state.tf] || 86400) !== 86400) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Đồng pha: mở biểu đồ khung NGÀY (1N)', '#787b86'); } };
+      const P = App.dongPha(D), a = Math.max(0, Math.min(100, I.op)) / 100;
+      const ky = x => x ? 'TĂNG' : 'chưa tăng', c = P.cuoi, du = P.dongPha[D.n - 1];
+      return { draw(g, X) {
+        let i = 0; while (i < D.n) { if (!P.dongPha[i]) { i++; continue; } let j = i; while (j + 1 < D.n && P.dongPha[j + 1]) j++;
+          const nua = Math.abs((X.x(1) || 0) - (X.x(0) || 0)) / 2, a1 = X.x(i), a2 = X.x(j); if (a1 != null && a2 != null) X.box(g, a1 - nua, 0, a2 + nua, X.H, `rgba(8,153,129,${a})`); i = j + 1; }
+        X.label(g, Math.min(X.W - 170, Math.max(170, X.W / 2)), 62, `Ngày ${ky(c.D)} · Tuần ${ky(c.W)} · Tháng ${ky(c.M)} → ${du ? 'ĐỒNG PHA' : 'chưa đồng pha'}`, du ? '#089981' : '#787b86');
+      } };
+    }
+  };
+
+  DEFS.st_dongpha = {
+    id: 'st_dongpha', name: 'Khoá học — Đồng pha N/T/Th: vào khung ngày, giữ tuần/tháng', cat: 'strategy', overlay: true, plots: [], levels: [],
+    inputs: [['lenh', 'Loại lệnh', 'Lệnh tuần', 'sel', ['Lệnh tuần', 'Lệnh tháng']],
+      ['vao', 'Tín hiệu vào (khung ngày)', '2MA hoặc MACD+Sto', 'sel', ['2MA hoặc MACD+Sto', '2MA', 'MACD+Sto']],
+      ['ban', 'Cách bán', 'Bán hết khi có tín hiệu bán', 'sel', ['Bán hết khi có tín hiệu bán', 'Bán 70% rồi bán nốt']],
+      ['phan', 'Phần bán lần đầu (%)', 70, 'int'], ['phi', 'Phí mỗi chiều (%)', 0.15, 'float'], ['thue', 'Thuế khi bán (%)', 0.1, 'float']],
+    calc(D, I) {
+      if ((App.TF[App.state.tf] || 86400) !== 86400) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Chiến lược đồng pha: mở biểu đồ khung NGÀY (1N) – vào lệnh theo khung ngày', '#787b86'); } };
+      const P = App.dongPha(D), S = App.macdSto(D), c = D.c, ma = { 6: T.sma(c, 6), 10: T.sma(c, 10), 20: T.sma(c, 20) }, atr = T.atr(D, 14);
+      const hug = T.sma(c.map((x, i) => Math.abs(x - ma[10][i])), 20).map((x, i) => x / atr[i]);
+      const cap = i => hug[i] <= 0.874 ? [10, 20] : [6, 10];
+      const tren = (i, cp) => ma[cp[0]][i] > ma[cp[1]][i];
+      const maLen = j => { const cp = cap(j); if (!(tren(j, cp) && j && !tren(j - 1, cp))) return false; return c[j] > ma[cp[0]][j] && c[j] > ma[cp[1]][j]; };
+      const banTF = I.lenh === 'Lệnh tháng' ? P.banM : P.banW;
+      let lan = 0;
+      const R = {
+        vt(j) {
+          if (j < 30 || !P.dongPha[j] || !(c[j] > D.o[j])) return null;
+          const ok = (I.vao !== 'MACD+Sto' && maLen(j)) || (I.vao !== '2MA' && (S.Mua1[j] || S.Mua2[j]));
+          if (!ok) return null; lan = 0; const sl = dayGanNhat(D, j); return sl != null ? { stop: sl } : null;
+        },
+        xn(j, fill) {
+          if (!P.dongPha[j] || !(c[j] > D.o[j] && c[j] > fill)) return null;
+          const ok = (I.vao !== 'MACD+Sto' && c[j] > ma[cap(j)[1]][j]) || (I.vao !== '2MA' && (S.XN1[j] || S.XN2[j] || S.XN3[j]));
+          if (!ok) return null; const sl = dayGanNhat(D, j); return sl != null ? { stop: sl } : null;
+        },
+        banPhan: I.ban === 'Bán 70% rồi bán nốt' ? (i => banTF[i] && ++lan === 1) : null,
+        banHet: i => I.ban === 'Bán 70% rồi bán nốt' ? (banTF[i] && lan >= 1) : banTF[i],
+        tenBan: `Tín hiệu bán MACD+Sto ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'}`,
+        note: `Đồng pha: chỉ vào khi Ngày + Tuần + Tháng cùng TĂNG (đỉnh/đáy cao dần + MACD trên tín hiệu + Sto 13-13-5 %K>%D); vào lệnh theo tín hiệu khung ngày (${I.vao}); bán theo tín hiệu bán MACD+Sto khung ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'} hoặc cắt lỗ đáy ngày gần nhất. CHƯA có kết quả kiểm định – đang backtest.`
+      };
+      return moPhongLo(D, R, I);
+    }
+  };
+
   DEFS.st_stockpredict = {
     id: 'st_stockpredict', name: 'StockPredict — Dự đoán xu hướng', cat: 'strategy', overlay: true, plots: [], levels: [],
     inputs: [['ng', 'Ngưỡng điểm (đã kiểm định: 50)', 50, 'float'], ['loc', 'Chỉ mua khi khung lớn tăng', true, 'bool'], ['r', 'Chốt lời = k × rủi ro', 3, 'float'],
@@ -4109,7 +4206,7 @@ window.App = window.App || {};
       else if (cur === 'pattern') {
         h = '<div class="isec">Mô hình biểu đồ</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'chart').map(row).join('')
           + '<div class="isec">Mô hình nến</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'candle').sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
-      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dinh_day', 'st_level1', 'st_macdsto', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
+      } else if (cur === 'stockpredict') h = ['sp_plan', 'sp_pha', 'sp_dong_pha', 'sp_dinh_day', 'st_dongpha', 'st_level1', 'st_macdsto', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
       else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
       else h = all.filter(d => d.cat === cur).sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
       $('#iList').innerHTML = h;
