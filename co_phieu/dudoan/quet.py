@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import co_ban, du_lieu, khuyen_nghi as K, phan_tich
+from . import co_ban, du_lieu, khuyen_nghi as K, mo_hinh, phan_tich
 
 
 @dataclass
@@ -26,6 +26,7 @@ class KetQuaMa:
     hieu_suat_20: float = 0.0   # % thay đổi 20 phiên
     dinh: dict = None           # {"D": TinHieuDinh, "W": TinHieuDinh}
     co_ban: dict = None         # số liệu cơ bản (P/E, ROE, sức khỏe…) – xem co_ban.tom_tat_co_ban
+    mo_hinh: float | None = None  # điểm mô hình học máy 0–100 (thử nghiệm, xem mo_hinh.py)
 
 
 def phan_tich_df(ma: str, df: pd.DataFrame, loai: str = "vn", san: str | None = None):
@@ -55,6 +56,10 @@ def _mot_ma(ma, san, ten, gtgd_min, nganh="Khác", lay_co_ban=True):
             r.dinh = {tam: K.tin_hieu_dinh(r.kq, tam, san=san) for tam in ("D", "W")}
             if len(df) > 21:
                 r.hieu_suat_20 = float(df["close"].iloc[-1] / df["close"].iloc[-21] - 1)
+            try:
+                r.mo_hinh = mo_hinh.diem_mo_hinh(df)["diem"]
+            except Exception:
+                r.mo_hinh = None
             if lay_co_ban:
                 try:
                     r.co_ban = co_ban.tom_tat_co_ban(ma, df)
@@ -185,6 +190,7 @@ def bang(ket_qua: list[KetQuaMa], tam: str = "D", von: float = 100e6) -> pd.Data
             "Khoảng ngày chốt lời": (f"{kn.thoi_gian.ngay(kn.thoi_gian.som):%d/%m} – {kn.thoi_gian.ngay(kn.thoi_gian.muon):%d/%m/%Y}"
                                      if kn.thoi_gian is not None and kn.thoi_gian.som is not None else None),
             "GTGD (tỷ)": _so(r.gtgd / 1e9, 1),
+            "Điểm mô hình": _so(getattr(r, "mo_hinh", None), 0),
             **(r.co_ban or {}),
             "Lý do": " · ".join(kn.ly_do),
         })

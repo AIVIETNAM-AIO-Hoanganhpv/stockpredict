@@ -6,6 +6,7 @@ Vùng mua đẹp = nơi nhiều mức hỗ trợ trùng nhau (hợp lưu) ngay d
 Chốt lời theo Fibonacci mở rộng ("hồi ít thì lên nhiều"), cắt lỗ dưới vùng mua.
 """
 import math
+import re
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -514,7 +515,7 @@ def danh_gia_vi_the(gia_von: float, so_luong: float, kq: KetQua, kn: KhuyenNghi 
     """Lãi/lỗ hiện tại của một vị thế và gợi ý Giữ / Chốt lời / Bán ở đỉnh / Cắt lỗ."""
     if not kq.khung:
         return {"gia": None, "lai": None, "pct": None, "goi_y": "Không có dữ liệu", "cat_lo": None,
-                "gia_ban": None, "lai_neu_ban": None}
+                "gia_ban": None, "lai_neu_ban": None, "vi_sao": ""}
     gia = kq.khung[-1].gia
     tien_von = gia_von * so_luong * (1 + PHI_MUA)
     lai = gia * so_luong * (1 - phi_ban - thue) - tien_von
@@ -526,22 +527,130 @@ def danh_gia_vi_the(gia_von: float, so_luong: float, kq: KetQua, kn: KhuyenNghi 
     ls = [s.price for s in (kqk.cau_truc.swings if kqk.cau_truc else []) if s.kind == "L"]
     cat_lo = (ls[-1] - 0.3 * atr) if ls else None      # đáy gần nhất – giá thủng xuống là tín hiệu bán
     if pct < -0.07 and kq.xu_huong <= 0:
-        goi_y = "Cắt lỗ"
+        goi_y, vi_sao = "Cắt lỗ", f"Đang lỗ {pct:.1%} (quá 7%) và xu hướng không còn tăng – giữ tiếp dễ lỗ sâu hơn."
     elif cat_lo and gia < cat_lo:
-        goi_y = "Bán – thủng hỗ trợ"
+        goi_y, vi_sao = "Bán – thủng hỗ trợ", f"Giá {gia:,.0f} đã thủng đáy gần nhất ({cat_lo:,.0f}) – cấu trúc tăng bị phá."
     elif dinh and dinh.muc == "Bán mạnh":
-        goi_y = "Bán ở đỉnh"
+        goi_y, vi_sao = "Bán ở đỉnh", f"Có {dinh.so_dau_hieu} dấu hiệu đỉnh (độ tin cậy thấp theo kiểm định)."
     elif kq.xu_huong == -1:
         goi_y = "Chốt lời / hạ tỷ trọng" if pct > 0 else "Cân nhắc bán"
+        vi_sao = "Xu hướng chung của mã đã chuyển sang giảm."
     elif dinh and dinh.muc == "Chốt lời dần" and pct > 0:
-        goi_y = "Chốt lời một phần (tín hiệu đỉnh)"
+        goi_y, vi_sao = "Chốt lời một phần (tín hiệu đỉnh)", f"Đang lãi {pct:.1%} và xuất hiện {dinh.so_dau_hieu} dấu hiệu đỉnh."
     elif kn and kn.chot_loi1 and gia >= kn.chot_loi1 * 0.99 and pct > 0:
-        goi_y = "Chốt lời một phần"
+        goi_y, vi_sao = "Chốt lời một phần", f"Giá đã tới mức chốt lời {kn.chot_loi1:,.0f}."
     elif kq.xu_huong == 1:
-        goi_y = "Giữ"
+        goi_y, vi_sao = "Giữ", "Xu hướng vẫn tăng, giá còn trên đáy gần nhất – giữ và dời cắt lỗ theo đáy mới."
     else:
-        goi_y = "Theo dõi"
+        goi_y, vi_sao = "Theo dõi", "Xu hướng đi ngang – giữ nhưng bán nếu thủng mức cắt lỗ."
     gia_ban = dinh.gia_ban if dinh and dinh.gia_ban else None
     lai_neu_ban = (gia_ban * so_luong * (1 - phi_ban - thue) - tien_von) if gia_ban else None
     return {"gia": gia, "lai": lai, "pct": pct, "goi_y": goi_y, "cat_lo": cat_lo,
-            "gia_ban": gia_ban, "lai_neu_ban": lai_neu_ban}
+            "gia_ban": gia_ban, "lai_neu_ban": lai_neu_ban, "vi_sao": vi_sao}
+
+
+
+# ------------------------------------------------------------------------- giải thích dễ hiểu
+# Kết quả kiểm định toàn thị trường 2020–2026 (xem ghi chú ở TRONG_SO)
+KD_LENH, KD_THANG, KD_LAI_TB, KD_NGAU_NHIEN = 2245, 0.44, 0.036, 0.023
+TEN_HO_TRO = {"MA50": "đường trung bình 50 phiên", "MA20": "đường trung bình 20 phiên", "MA200": "đường trung bình 200 phiên",
+              "OB tăng": "vùng lệnh mua lớn trước đây (Order Block)", "FVG tăng": "khoảng trống giá chưa lấp (FVG)",
+              "Đáy gần nhất": "đáy gần nhất", "Đáy trước": "đáy trước đó"}
+
+
+def _ten_ho_tro(x: str) -> str:
+    if x.startswith("Fibo "):
+        try:
+            return f"mức hồi Fibonacci {float(x.split()[1]):.1%}".replace(".0%", "%").replace(".", ",")
+        except ValueError:
+            return x
+    return TEN_HO_TRO.get(x, x)
+
+
+def _so_dep(text: str) -> str:
+    """1.38e+05 → 138,000 trong câu giải thích."""
+    return re.sub(r"\d+(?:\.\d+)?e[+-]\d+", lambda m: f"{float(m.group()):,.0f}".replace(",", "."), text)
+
+
+def giai_thich(kq: KetQua, kn: KhuyenNghi, von: float | None = None, lo: int = 100) -> dict:
+    """Kế hoạch rõ ràng cho 1 mã: điểm mua, cắt lỗ, chốt lời (giá, %, tiền), ngày dự kiến, lãi kỳ vọng và VÌ SAO.
+    Mã chưa đủ điều kiện vẫn có kế hoạch nhưng ghi 'tham khảo – chưa vào' và điều kiện còn thiếu."""
+    def _d(x):
+        return f"{x:,.0f}".replace(",", ".")
+    sl_atr = str(SL_ATR).replace(".", ",")
+    tam = kn.tam
+    lon_ten = KHUNG_LON.get(tam, "lớn")
+    kqk = next((k for k in kq.khung if k.khung == tam), None)
+    lon = next((k for k in kq.khung if k.khung == lon_ten), None)
+    vao = kn.muc == "Mua"
+    if vao:
+        dieu_kien = f"Đã đủ điều kiện: điểm ≥ {NGUONG_MUA:.0f} và khung {lon_ten} đang tăng."
+    else:
+        thieu = []
+        if kqk is not None and kqk.xu_huong == -1:
+            thieu.append(f"khung {tam} hết giảm")
+        if kn.diem < NGUONG_MUA:
+            thieu.append(f"điểm lên ≥ {NGUONG_MUA:.0f} (đang {kn.diem:+.0f})")
+        if not (lon and lon.xu_huong == 1):
+            thieu.append(f"khung {lon_ten} chuyển sang tăng")
+        dieu_kien = "Chỉ vào khi: " + (", ".join(thieu) or "tín hiệu xác nhận") + "."
+    kh = {"vao_lenh": vao, "trang_thai": "VÀO LỆNH" if vao else "THAM KHẢO – CHƯA VÀO", "dieu_kien": dieu_kien,
+          "gia": kn.gia, "gia_mua": kn.gia_mua, "cat_lo": kn.cat_lo, "chot_loi": kn.chot_loi1,
+          "lai_pct": kn.lai_pct, "lo_pct": kn.lo_pct, "rr": kn.rr, "giu_toi_da": GIU_TOI_DA,
+          "vung": (kn.vung.thap, kn.vung.cao) if kn.vung else None}
+    # Điểm mua
+    if kn.vung:
+        ho_tro = ", ".join(_ten_ho_tro(x) for x in kn.vung.ly_do[:4])
+        kh["vi_sao_mua"] = (f"Mua giá mở cửa phiên sau (~{_d(kn.gia_mua)}) theo quy tắc đã kiểm định; giá đẹp hơn nếu "
+                            f"hồi về vùng {_d(kn.vung.thap)}–{_d(kn.vung.cao)} – nơi hội tụ {ho_tro}.")
+    else:
+        kh["vi_sao_mua"] = f"Mua giá mở cửa phiên sau (~{_d(kn.gia_mua)}); chưa có vùng hỗ trợ rõ gần giá."
+    # Cắt lỗ
+    if kn.vung and kn.cat_lo and kn.cat_lo < kn.vung.thap:
+        kh["vi_sao_cat_lo"] = (f"Đặt dưới vùng hỗ trợ ({_d(kn.vung.thap)}) thêm {sl_atr} lần biên dao động trung bình "
+                               "(ATR): giá thủng mức này nghĩa là vùng hỗ trợ đã hỏng, nhận định sai.")
+    else:
+        kh["vi_sao_cat_lo"] = "Giá mua trừ 1 lần biên dao động trung bình (ATR) – không có vùng hỗ trợ gần để dựa vào."
+    kh["vi_sao_chot_loi"] = (f"= giá mua + {TP_R:g} × khoảng cắt lỗ (lãi gấp {TP_R:g} lần mức chấp nhận lỗ) – mức cho kết quả "
+                             f"tốt nhất khi kiểm định 2006–2026. Chưa chạm sau {GIU_TOI_DA} phiên thì bán.")
+    # Ngày dự kiến
+    tg = kn.thoi_gian
+    if tg is None and kqk is not None and kn.chot_loi1 and kq.frames.get(tam) is not None:
+        try:
+            tg = du_kien_thoi_gian(kq.frames[tam], kqk, kn.gia_mua, kn.chot_loi1)
+        except Exception:
+            tg = None
+    kh["ngay_du_kien"] = tg.ngay(tg.thuong) if tg is not None and tg.thuong is not None else None
+    kh["ngay_som"] = tg.ngay(tg.som) if tg is not None and tg.som is not None else None
+    kh["ngay_muon"] = tg.ngay(tg.muon) if tg is not None and tg.muon is not None else None
+    # Tiền
+    if von:
+        t = ke_hoach_von(kn, von, lo)
+        if t.get("tp1") and t["tp1"]["so_cp"] > 0:
+            kh.update(so_cp=t["tp1"]["so_cp"], tien_mua=t["tp1"]["tien_mua"], tien_lai=t["tp1"]["lai"],
+                      pct_lai_rong=t["tp1"]["pct"], tien_lo=t["sl"]["lai"], pct_lo_rong=t["sl"]["pct"],
+                      tien_ky_vong=t["tp1"]["tien_mua"] * KD_LAI_TB)
+    kh["ky_vong_pct"] = KD_LAI_TB
+    kh["ky_vong"] = (f"Theo kiểm định 2020–2026 ({KD_LENH:,} lệnh Mua): {KD_THANG:.0%} số lệnh có lãi, trung bình "
+                     f"{KD_LAI_TB:+.1%}/lệnh; mua ngẫu nhiên giữ 60 phiên được {KD_NGAU_NHIEN:+.1%}. Một nghiên cứu khác "
+                     "(so từng 20 phiên) cho thấy tín hiệu Mua chưa hơn ngẫu nhiên → lãi kỳ vọng KHÔNG chắc chắn.")
+    # Vì sao (các chỉ báo đang ủng hộ / phản đối, theo trọng số đã kiểm định)
+    ung_ho, phan_doi = [], []
+    for k, nhan in ((kqk, f"khung {tam}"), (lon, f"khung {lon_ten}")):
+        if k is None:
+            continue
+        for v in k.votes:
+            w = TRONG_SO.get(v.ten, 0)
+            if not w or not v.gia_tri:
+                continue
+            dong = (abs(v.gia_tri) * w, f"{v.ten} ({nhan}): {_so_dep(v.ly_do)}")
+            (ung_ho if v.gia_tri > 0 else phan_doi).append(dong)
+    ung_ho.sort(reverse=True)
+    phan_doi.sort(reverse=True)
+    xh = {1: "tăng", -1: "giảm", 0: "đi ngang"}
+    kh["vi_sao"] = ([f"Xu hướng: khung {tam} {xh[kqk.xu_huong] if kqk else '?'}, khung {lon_ten} "
+                     f"{xh[lon.xu_huong] if lon else '?'} · điểm tổng {kn.diem:+.0f}/100 (cần ≥ {NGUONG_MUA:.0f} để mua)."]
+                   + ["✔ " + x for _, x in ung_ho[:4]] + ["✖ " + x for _, x in phan_doi[:3]])
+    kh["tom_tat"] = (f"Mua ~{_d(kn.gia_mua)}, cắt lỗ {_d(kn.cat_lo)} ({kn.lo_pct:+.1%}), chốt lời {_d(kn.chot_loi1)} "
+                     f"({kn.lai_pct:+.1%})" if kn.gia_mua and kn.cat_lo and kn.chot_loi1 and kn.lo_pct is not None else "")
+    return kh

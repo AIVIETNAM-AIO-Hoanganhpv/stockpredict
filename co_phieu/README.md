@@ -236,3 +236,19 @@ tests/               kiểm tra bằng dữ liệu giả lập
 - **💼 Danh mục của tôi**: mã đang giữ + danh sách theo dõi.
 - **🧰 Nâng cao**: bảng khuyến nghị đầy đủ, theo ngày, bộ lọc cơ bản, tin thị trường.
 - Khi Vietcap chặn (bản online), giá lấy từ VNDirect; phần Doanh nghiệp hiện bản tóm tắt từ VNDirect.
+
+## Kế hoạch rõ ràng cho từng mã (web app)
+Mỗi mã có: **điểm mua** (giá mở cửa phiên sau + vùng mua đẹp), **cắt lỗ**, **chốt lời** (giá, %, số tiền theo vốn,
+đã trừ phí/thuế), **ngày dự kiến chạm chốt lời**, **lãi kỳ vọng theo kiểm định** và **vì sao** (các chỉ báo ủng hộ ✔ /
+phản đối ✖). Mã chưa đủ điều kiện vẫn có kế hoạch nhưng ghi "THAM KHẢO – CHƯA VÀO" và điều kiện còn thiếu.
+Mã đang giữ (Danh mục): Giữ / Chốt lời / Cắt lỗ + mức cắt lỗ, chốt lời và lý do. Hàm: `khuyen_nghi.giai_thich`.
+
+## Điểm mô hình học máy (thử nghiệm) 🤖
+`dudoan/mo_hinh.py` + `mo_hinh_model.json` (cây quyết định LightGBM chuyển sang JSON, chạy bằng numpy/pandas).
+Nghiên cứu 19/11/2026 (`nghien_cuu/mo_hinh_hoc_may_RESULT.md`), kiểm tra ngoài mẫu 2020–2026, mua 10 mã điểm cao nhất
+mỗi 20 phiên so với mua đều mọi mã thanh khoản:
+- Tín hiệu Mua hiện tại của công cụ: **−0,9%/20 phiên** so với mua ngẫu nhiên (chỉ hơn 1/7 năm).
+- Quy tắc đơn giản (đà tăng, gần đỉnh 52 tuần): không hơn ngẫu nhiên.
+- Mô hình học máy: **≈ +1%/20 phiên**, dương cả 7 năm nhưng bằng chứng YẾU (t ≈ 1,7–2,1; lợi thế chủ yếu ở mã nhỏ;
+  từng mã riêng chỉ thắng ~50% – cần đa dạng ≥ 10 mã; đã thử ~30 biến thể nên có thể do may).
+→ Chỉ hiện như một cột tham khảo, KHÔNG dùng để ra quyết định mua. Theo dõi thêm vài tháng để tự kiểm tra.

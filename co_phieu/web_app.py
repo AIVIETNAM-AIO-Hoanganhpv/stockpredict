@@ -16,7 +16,7 @@ import streamlit.components.v1 as components
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, co_ban as CB, du_lieu, greenview as G, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
+from dudoan import bao_cao, co_ban as CB, du_lieu, greenview as G, mo_hinh as MH, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -849,7 +849,7 @@ def trang_danh_muc():
         rows.append({"Mã": m, "Dự kiến chốt lời": con_lai, "Giá mua": r["Giá mua"], "Giá hiện tại": v["gia"],
                      "Số lượng": r["Số lượng"],
                      "Lãi/lỗ": v["lai"], "%": v["pct"] * 100 if v["pct"] is not None else None,
-                     "Gợi ý": v["goi_y"], "Tín hiệu đỉnh": dinh.muc if dinh else "–",
+                     "Gợi ý": v["goi_y"], "Vì sao": v.get("vi_sao", ""), "Tín hiệu đỉnh": dinh.muc if dinh else "–",
                      "Giá bán đề xuất": v["gia_ban"], "Lãi nếu bán": v["lai_neu_ban"],
                      "Cắt lỗ động": v["cat_lo"], "Chốt lời": kn.chot_loi1 if kn else None})
     if rows:
@@ -858,6 +858,17 @@ def trang_danh_muc():
         c2.metric("Lãi/lỗ (sau phí, thuế)", tien(tong_lai), f"{tong_lai / tong_von:+.1%}" if tong_von else None)
         def mau_lai(v):
             return "" if v is None or pd.isna(v) else ("color:#16a34a" if v > 0 else "color:#dc2626")
+        for r in rows:
+            mau_r = "#15803d" if r["Gợi ý"] == "Giữ" else "#dc2626" if any(
+                x in r["Gợi ý"] for x in ("Cắt lỗ", "Bán")) else "#d97706"
+            ban = [f"cắt lỗ nếu thủng **{gd(r['Cắt lỗ động'])}**" if r.get("Cắt lỗ động") else "",
+                   f"chốt lời tại **{gd(r['Chốt lời'])}**" if r.get("Chốt lời") else "",
+                   f"bán ở đỉnh quanh **{gd(r['Giá bán đề xuất'])}**" if r.get("Giá bán đề xuất") else ""]
+            st.markdown(f"<span style='color:{mau_r};font-weight:700'>{r['Mã']}: {r['Gợi ý'].upper()}</span> · "
+                        f"giá {gd(r['Giá hiện tại'])} · lãi/lỗ {trieu(r['Lãi/lỗ'])} "
+                        f"({pt(r['%'] / 100 if r['%'] is not None else None)})", unsafe_allow_html=True)
+            st.markdown("Kế hoạch: " + ", ".join(x for x in ban if x) + (f" · dự kiến {r['Dự kiến chốt lời']}"
+                        if r.get("Dự kiến chốt lời") else "") + f"  \nVì sao: {r['Vì sao']}")
         st.dataframe(pd.DataFrame(rows).style.map(mau_lai, subset=["Lãi/lỗ", "%"]).format(
             {"Giá mua": "{:,.0f}", "Giá hiện tại": "{:,.0f}", "Số lượng": "{:,.0f}", "Lãi/lỗ": "{:,.0f}",
              "%": "{:+.1f}%", "Cắt lỗ động": "{:,.0f}", "Chốt lời": "{:,.0f}", "Giá bán đề xuất": "{:,.0f}",
@@ -943,32 +954,94 @@ def cau_tin_cay(tc: dict | None) -> str:
     return rieng + "  \n" + chung
 
 
-def the_ket_luan(kq, kn, dinh, tc: dict | None):
-    """Thẻ kết luận một mã: NÊN MUA / CHỜ / KHÔNG MUA + giá + độ tin cậy."""
+def trieu(x):
+    """Số tiền gọn: 19,2 triệu / 1,25 tỷ."""
+    if x is None or pd.isna(x):
+        return "–"
+    a = abs(x)
+    t = f"{x / 1e9:,.2f} tỷ" if a >= 1e9 else f"{x / 1e6:,.1f} triệu" if a >= 1e6 else f"{x:,.0f} đ"
+    return t.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def pt(x):
+    return "–" if x is None else f"{x:+.1%}".replace(".", ",")
+
+
+def gd(x):
+    return "–" if x is None or pd.isna(x) else f"{x:,.0f}".replace(",", ".")
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def diem_mh(ma: str):
+    try:
+        return MH.diem_mo_hinh(du_lieu.tai(ma, "D"))
+    except Exception:
+        return None
+
+
+def cau_mo_hinh(m: dict | None) -> str:
+    if not m:
+        return ""
+    return (f"🤖 Điểm mô hình (thử nghiệm): **{m['diem']:.0f}/100** (nhóm {m['nhom']}/10) – lịch sử nhóm này: "
+            f"vượt TB thị trường {pt(m['vuot_tb_20'])}/20 phiên, {m['ti_le_thang_20']:.0%} số lần vượt. "
+            "Độ tin cậy thấp, chỉ tham khảo.")
+
+
+def the_ke_hoach(kq, kn, gt: dict, gon: bool = False):
+    """Kế hoạch: điểm mua / cắt lỗ / chốt lời (giá, %, tiền), ngày dự kiến, lãi kỳ vọng và VÌ SAO."""
+    vao = gt["vao_lenh"]
+    nen = "#ecfdf5" if vao else "#f8fafc"
+    vien = "#15803d" if vao else "#94a3b8"
+    tien = gt.get("so_cp")
+    vung = f" (vùng đẹp {gd(gt['vung'][0])}–{gd(gt['vung'][1])})" if gt.get("vung") else ""
+    hang = [
+        ("🟦 Điểm mua", f"{gd(gt['gia_mua'])}{vung}", "",
+         f"{gd(gt['so_cp'])} CP = {trieu(gt['tien_mua'])}" if tien else "", gt["vi_sao_mua"]),
+        ("🟥 Cắt lỗ", gd(gt["cat_lo"]), pt(gt["lo_pct"]), trieu(gt.get("tien_lo")) if tien else "",
+         gt["vi_sao_cat_lo"]),
+        ("🟩 Chốt lời", gd(gt["chot_loi"]), pt(gt["lai_pct"]),
+         ("+" + trieu(gt.get("tien_lai"))) if tien else "", gt["vi_sao_chot_loi"]),
+    ]
+    html = (f"<div style='border:2px solid {vien};background:{nen};border-radius:12px;padding:10px 12px;margin:6px 0'>"
+            f"<div style='font-weight:700;color:{vien}'>{'✅ ' if vao else '⏸ '}KẾ HOẠCH: {gt['trang_thai']}</div>"
+            f"<div style='font-size:13px;color:#475569;margin-bottom:6px'>{gt['dieu_kien']}</div>")
+    for ten, gia, p_, tien_, ly in hang:
+        html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'><b>{ten}: {gia}</b>"
+                 + (f" <b>({p_})</b>" if p_ else "") + (f" · {tien_}" if tien_ else "")
+                 + ("" if gon else f"<div style='font-size:12.5px;color:#64748b'>{ly}</div>") + "</div>")
+    if gt.get("ngay_du_kien") is not None:
+        kh = (f" (sớm {gt['ngay_som']:%d/%m} – muộn {gt['ngay_muon']:%d/%m/%Y})"
+              if gt.get("ngay_som") is not None and gt.get("ngay_muon") is not None else "")
+        html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'>📅 Dự kiến chạm chốt lời: "
+                 f"<b>{gt['ngay_du_kien']:%d/%m/%Y}</b>{kh}" + (" – nếu vào lệnh" if not vao else "") + "</div>")
+    if tien:
+        html += (f"<div style='padding:4px 0;border-top:1px solid #e2e8f0'>💰 Với vốn {trieu(von)}: đúng → "
+                 f"<b style='color:#15803d'>+{trieu(gt['tien_lai'])}</b> ({pt(gt['pct_lai_rong'])}), sai → "
+                 f"<b style='color:#dc2626'>{trieu(gt['tien_lo'])}</b> ({pt(gt['pct_lo_rong'])}) – đã trừ phí, thuế."
+                 + (f" Trung bình kỳ vọng theo kiểm định: <b>≈ +{trieu(gt['tien_ky_vong'])}/lệnh</b> "
+                    f"({pt(gt['ky_vong_pct'])})." if vao else " Lãi kỳ vọng chỉ tính khi tín hiệu đủ điều kiện.")
+                 + "</div>")
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+    if not gon:
+        st.markdown("**❓ Vì sao**  \n" + "  \n".join(gt["vi_sao"]))
+        st.caption(gt["ky_vong"])
+
+
+def the_ket_luan(kq, kn, dinh, tc: dict | None, gt: dict, mh: dict | None = None):
+    """Thẻ kết luận một mã: NÊN MUA / CHỜ / KHÔNG MUA + kế hoạch rõ ràng + vì sao + độ tin cậy."""
     chu, mau = KET_LUAN.get(kn.muc, (kn.muc.upper(), "#64748b"))
-    dong = []
-    g = kq.chinh.gia
-    if kn.muc in ("Mua", "Gần đủ điều kiện") and kn.gia_mua:
-        vung = f"{kn.vung.thap:,.0f}–{kn.vung.cao:,.0f}" if kn.vung else f"{kn.gia_mua:,.0f}"
-        tg = kn.thoi_gian
-        ngay = ""
-        if tg is not None and tg.thuong is not None and tg.ngay(tg.thuong) is not None:
-            ngay = f", dự kiến khoảng **{tg.ngay(tg.thuong):%d/%m/%Y}**"
-        dau = "Mua quanh" if kn.muc == "Mua" else "Chưa mua vội. Nếu tín hiệu đủ, mua quanh"
-        dong.append(f"{dau} **{vung}** (giá hiện {g:,.0f}).")
-        dong.append(f"Cắt lỗ **{kn.cat_lo:,.0f}** ({kn.lo_pct:+.1%}) · chốt lời **{kn.chot_loi1:,.0f}** "
-                    f"({kn.lai_pct:+.1%}){ngay} · giữ tối đa {K.GIU_TOI_DA} phiên.")
-    elif kn.ly_do:
-        dong.append(f"Giá hiện {g:,.0f}. Lý do: {kn.ly_do[0]}")
-    if dinh is not None and dinh.muc in ("Bán mạnh", "Chốt lời dần"):
-        vb = f" quanh {dinh.vung_ban[0]:,.0f}–{dinh.vung_ban[1]:,.0f}" if dinh.vung_ban else ""
-        dong.append(f"Nếu đang giữ: có tín hiệu đỉnh (**{dinh.muc}**){vb} – tín hiệu này độ tin cậy thấp.")
     st.markdown(
         f"<div style='padding:14px 16px;border-radius:14px;background:{mau};color:white'>"
-        f"<div style='font-size:14px;opacity:.9'>{kq.ma} · {'ngắn hạn 1–3 tháng' if kn.tam == 'D' else 'trung hạn 3–9 tháng'}"
-        f" · điểm {kn.diem:+.0f}</div>"
+        f"<div style='font-size:14px;opacity:.9'>{kq.ma} · giá {gd(kq.chinh.gia)} · "
+        f"{'ngắn hạn 1–3 tháng' if kn.tam == 'D' else 'trung hạn 3–9 tháng'} · điểm {kn.diem:+.0f}</div>"
         f"<div style='font-size:28px;font-weight:800;line-height:1.2'>{chu}</div></div>", unsafe_allow_html=True)
-    st.markdown("  \n".join(dong))
+    the_ke_hoach(kq, kn, gt)
+    if dinh is not None and dinh.muc in ("Bán mạnh", "Chốt lời dần"):
+        vb = f" quanh {gd(dinh.vung_ban[0])}–{gd(dinh.vung_ban[1])}" if dinh.vung_ban else ""
+        st.warning(f"Nếu đang giữ: có tín hiệu đỉnh (**{dinh.muc}**){vb} – độ tin cậy thấp theo kiểm định.")
+    if mh:
+        st.markdown(cau_mo_hinh(mh))
     st.caption(cau_tin_cay(tc).replace("**", ""))
 
 
@@ -1012,8 +1085,8 @@ def xem_ma(ma: str, noi: str):
                 tc = do_tin_cay(kq.ma)
         except Exception:
             tc = None
-        the_ket_luan(kq, kn, dinh, tc)
-        with st.expander("💰 Tính tiền lãi/lỗ theo số vốn & lý do chi tiết"):
+        the_ket_luan(kq, kn, dinh, tc, K.giai_thich(kq, kn, von), diem_mh(kq.ma))
+        with st.expander("📋 Thêm: chốt lời từng phần, tín hiệu đỉnh, các lần báo Mua trước"):
             the_khuyen_nghi(kn, von)
             the_tin_hieu_dinh(dinh)
             if tc and tc["ds"]:
@@ -1079,22 +1152,37 @@ def trang_hom_nay():
         hang = {m: i for i, m in enumerate(K.MUC)}
         b = b.assign(_h=b["Khuyến nghị"].map(hang)).sort_values(["_h", "Điểm"], ascending=False)
         mua = b[b["Khuyến nghị"] == "Mua"]
-        st.markdown(f"#### 🟢 Nên mua hôm nay: {len(mua)} mã")
-        st.caption(f"Cập nhật {kho['luc']} · đã xét {tk.get('phan_tich', len(b))} mã đủ thanh khoản. "
-                   + ("Thị trường xấu nên rất ít mã đạt đủ điều kiện – đó là tín hiệu nên chờ." if len(mua) < 3 else ""))
-        top = b.head(max(5, len(mua)))
-        for _, r in top.iterrows():
-            chu, mau = KET_LUAN.get(r["Khuyến nghị"], (r["Khuyến nghị"], "#64748b"))
-            gia = (f"mua {r['Vùng mua']} · cắt lỗ {r['Cắt lỗ']:,.0f} · chốt lời {r['Chốt lời']:,.0f}"
-                   if pd.notna(r.get("Cắt lỗ")) and pd.notna(r.get("Chốt lời")) and r.get("Vùng mua") else "")
-            dk = r.get("Dự kiến chốt lời")
-            ngay = f" · dự kiến {dk}" if isinstance(dk, str) and dk else ""
-            st.markdown(f"<div style='padding:8px 12px;margin:4px 0;border-left:6px solid {mau};background:#f8fafc;"
-                        f"border-radius:8px'><b style='font-size:17px'>{r['Mã']}</b> "
-                        f"<span style='color:{mau};font-weight:700'>{chu}</span> · giá {r['Giá']:,.0f} "
-                        f"<span style='color:#64748b;font-size:13px'>· {r.get('Ngành') or ''}</span><br>"
-                        f"<span style='font-size:14px'>{gia}{ngay}</span></div>", unsafe_allow_html=True)
-        st.caption("Luôn hiện 5 mã điểm cao nhất kể cả khi chưa đủ điều kiện mua (ghi rõ CHỜ / CHƯA NÊN MUA). "
+        the = []
+        for _, r in b.head(max(5, len(mua))).iterrows():
+            try:      # phân tích lại theo giá mới nhất để thẻ khớp với trang Tra cứu
+                kq_r, _, _ = phan_tich(r["Mã"], False)
+                kn_r = K.khuyen_nghi(kq_r, tam)
+                the.append((r, kq_r, kn_r, K.giai_thich(kq_r, kn_r, von), kn_r.muc, kn_r.gia))
+            except Exception:
+                the.append((r, None, None, None, r["Khuyến nghị"], r["Giá"]))
+        the.sort(key=lambda x: -K.MUC.index(x[4]) if x[4] in K.MUC else 0)
+        so_mua = sum(x[4] == "Mua" for x in the)
+        st.markdown(f"#### 🟢 Nên mua lúc này: {so_mua} mã")
+        st.caption(f"Danh sách lấy từ bản quét {kho['luc']} ({tk.get('phan_tich', len(b))} mã đủ thanh khoản), "
+                   "kết luận tính lại theo giá mới nhất. "
+                   + ("Rất ít mã đủ điều kiện – đó là tín hiệu nên chờ, chưa vội mua." if so_mua < 2 else ""))
+        for r, kq_r, kn_r, gt, muc, gia in the:
+            chu, mau = KET_LUAN.get(muc, (muc, "#64748b"))
+            mh = r.get("Điểm mô hình")
+            st.markdown(f"<div style='margin-top:10px;padding:6px 12px;border-radius:10px 10px 0 0;background:{mau};"
+                        f"color:white'><b style='font-size:17px'>{r['Mã']}</b> · <b>{chu}</b> · giá {gd(gia)}"
+                        f"<span style='font-size:12px;opacity:.9'> · {r.get('Ngành') or ''}"
+                        + (f" · 🤖 {mh:.0f}/100" if isinstance(mh, (int, float)) and not pd.isna(mh) else "")
+                        + "</span></div>", unsafe_allow_html=True)
+            if gt:
+                the_ke_hoach(kq_r, kn_r, gt, gon=True)
+                ly = [x[2:] for x in gt["vi_sao"][1:] if x.startswith("✔")][:2]
+                st.caption(("Vì sao: " + " · ".join(ly)) if ly else gt["dieu_kien"])
+            else:
+                st.caption(f"Mua {r.get('Vùng mua') or gd(r.get('Giá mua'))} · cắt lỗ {gd(r.get('Cắt lỗ'))} · "
+                           f"chốt lời {gd(r.get('Chốt lời'))}")
+        st.caption("Luôn hiện 5 mã điểm cao nhất (theo bản quét) kể cả khi chưa đủ điều kiện mua – khi đó kế hoạch ghi "
+                   "\"THAM KHẢO – CHƯA VÀO\". 🤖 = điểm mô hình học máy (thử nghiệm). "
                    + cau_tin_cay(None).replace("**", ""))
         ban = kho.get(f"ban_{tam}")
         if ban is not None and not ban.empty:
@@ -1102,7 +1190,7 @@ def trang_hom_nay():
             if not manh.empty:
                 st.markdown(f"#### 🔴 Nếu đang giữ, cân nhắc chốt lời: {', '.join(manh['Mã'].head(12))}")
                 st.caption("Tín hiệu đỉnh – kiểm định cho thấy độ tin cậy thấp, chỉ để tham khảo.")
-        chon = st.selectbox("Xem chi tiết mã", top["Mã"].tolist(), index=None, placeholder="Chọn mã để xem chi tiết",
+        chon = st.selectbox("Xem chi tiết mã", [x[0]["Mã"] for x in the], index=None, placeholder="Chọn mã để xem chi tiết",
                             key="hn_chon")
         if chon:
             xem_ma(chon, "hom_nay")
