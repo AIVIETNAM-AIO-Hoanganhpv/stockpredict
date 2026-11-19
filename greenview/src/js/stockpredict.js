@@ -19,6 +19,7 @@
   /* ---------------- Dữ liệu ---------------- */
   const SP = App.sp = { goi: {}, dang: {} };
   if (hasData()) SP.goi[window.GV_DATA.ma] = window.GV_DATA;
+  (window.GV_DATA_THEM || []).forEach(g => { if (g && g.ma && g.bars) SP.goi[g.ma] = g; });   // nhiều mã nhúng sẵn (trang xem trên điện thoại)
 
   async function daily(sym, fresh) {
     const g = SP.goi[sym];
