@@ -326,7 +326,7 @@ if trongKy and tinHieuMua
         nhipNen = not na(dH1Bar) and not na(extDayTruocBar) ? dH1Bar - extDayTruocBar : na
         tocDo = not na(nhipNen) and nhipNen > 0 ? (extDinh - extDayTruoc) / nhipNen : na
         if hienTG and not na(tocDo) and tocDo > 0
-            soNen = math.min(499, math.max(1, math.round((tpL - close) / tocDo)))
+            soNen = math.min(499, math.max(1, math.round((tpL - close) / tocDo * 2.68)))   // ×2.68: hiệu chỉnh theo backtest
             line.new(bar_index + soNen, low, bar_index + soNen, high, extend=extend.both, color=color.new(color.teal, 30), style=line.style_dotted, width=1)
             label.new(bar_index + soNen, tpL, "Dự kiến chốt lời ~" + str.tostring(soNen) + " phiên" + (na(nhipNen) ? "" : " (Fibo 1.0: " + str.tostring(nhipNen) + ")"), style=label.style_label_down, color=color.new(color.teal, 10), textcolor=color.white, size=size.small)
     else

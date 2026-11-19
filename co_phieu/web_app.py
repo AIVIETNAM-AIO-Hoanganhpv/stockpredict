@@ -130,9 +130,11 @@ def the_khuyen_nghi(kn, von: float, lo: int = 100):
             if tg.fibo:
                 f = lambda d: d.strftime("%d/%m/%Y") if d is not None else "?"  # noqa: E731
                 dong += (f"  \n⏱ Theo Fibonacci thời gian: {f(tg.ngay(tg.fibo[0]))} / {f(tg.ngay(tg.fibo[1]))} / "
-                         f"{f(tg.ngay(tg.fibo[2]))} (0.618 / 1 / 1.618 × nhịp trước)")
+                         f"{f(tg.ngay(tg.fibo[2]))} (0.618 / 1 / 1.618 × nhịp trước – kiểm định cho thấy "
+                         f"thường quá sớm, độ tin cậy thấp)")
             st.markdown(dong)
-            st.caption("Ngày tính theo phiên giao dịch (bỏ thứ 7, CN; chưa trừ ngày lễ). Chỉ là ước lượng.")
+            st.caption("Ngày tính theo phiên giao dịch (bỏ thứ 7, CN; chưa trừ ngày lễ). Kiểm định 2 năm: khoảng 50% "
+                       "lệnh chạm chốt lời nằm trong khoảng dự kiến, sai số trung vị ~7–8 phiên. Chỉ là ước lượng.")
         lai = K.ke_hoach_von(kn, von, lo)
         if lai.get("tp1") and lai["tp1"]["so_cp"] > 0:
             rows = [("Chốt lời 1", kn.chot_loi1, lai["tp1"])]

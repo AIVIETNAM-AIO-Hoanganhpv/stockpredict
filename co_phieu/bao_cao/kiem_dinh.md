@@ -31,6 +31,11 @@ Khi báo **Không mua** (9,411 lần): giá tăng sau 20 phiên 49% số lần, 
 | Sức khỏe < 3 hoặc đang lỗ | +1.5% (8,565) | 259 | 27% | -0.9% | 915 | 24% | -0.4% | 974 | 51% |
 | Không đủ dữ liệu BCTC | +2.9% (214) | 5 | 20% | -0.6% | 21 | 48% | +4.7% | 13 | 38% |
 
+## Timing – dự kiến ngày chốt lời (các lệnh Mua chạm chốt lời)
+- Số lệnh: 170, thực tế trung vị 16 phiên.
+- **Theo tốc độ nhịp cũ**: 22% lệnh chạm chốt lời trong khoảng sớm–muộn; sai số trung vị so với mốc 'thường' 9 phiên.
+- **Theo Fibonacci thời gian**: 19% lệnh trong khoảng 0.618–1.618; sai số trung vị với mốc 1.0: 14 phiên.
+
 Theo dõi đỉnh (5439 lần): đúng 50%, TB 20 phiên +1.2%.
 
 > Lưu ý: chỉ gồm các mã còn niêm yết và đủ thanh khoản hôm nay (thiên lệch sống sót); kết quả quá khứ không đảm bảo tương lai.

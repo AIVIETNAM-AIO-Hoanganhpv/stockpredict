@@ -78,6 +78,15 @@
   "ti_le_dung_20": 0.5008273579702152,
   "r20_tb": 0.01164350580985843
  },
+ "timing": {
+  "so": 170,
+  "phien_thuc_te_tv": 16.0,
+  "toc_do_trong_khoang": 0.2235294117647059,
+  "toc_do_sai_so_tv": 9.494130501296816,
+  "fibo1_sai_so_tv": 13.5,
+  "fibo_khoang": 0.18823529411764706,
+  "fibo_gan_nhat_sai_so_tv": 11.10100000000002
+ },
  "theo_suc_khoe": [
   {
    "nhom": "Sức khỏe ≥ 4 & đang lãi",

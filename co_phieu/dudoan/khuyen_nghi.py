@@ -249,6 +249,10 @@ def khuyen_nghi(kq: KetQua, tam: str = "D", loai: str | None = None, san: str | 
 
 # ------------------------------------------------------------------------- timing: ngày chốt lời dự kiến
 PHIEN_MOI_NEN = {"D": 1, "W": 5, "M": 21, "4H": 0.5, "1H": 0.2, "15m": 0.05}
+# Hiệu chỉnh từ backtest 19/11/2026 (170 lệnh chạm chốt lời, 267 mã): thực tế / dự kiến theo tốc độ
+# = 1.45 (phân vị 25%) · 2.68 (trung vị) · 4.61 (75%). Kiểm tra trên nửa dữ liệu không dùng để hiệu chỉnh:
+# 53% lệnh nằm trong khoảng sớm–muộn, sai số trung vị 7,5 phiên. Fibonacci thời gian lệch xa hơn (~6 lần).
+HIEU_CHINH_TG = (1.45, 2.68, 4.61)
 
 
 def _nhip_tang_cu(kqk: KetQuaKhung, so: int = 12) -> list:
@@ -293,8 +297,8 @@ class ThoiGian:
 
 def du_kien_thoi_gian(df: pd.DataFrame, kqk: KetQuaKhung, gia_vao: float, chot_loi: float) -> ThoiGian:
     """Dự kiến bao lâu chạm chốt lời.
-    • Tốc độ: mỗi nhịp tăng cũ đi được bao nhiêu ATR mỗi nến → số nến cần để đi (chốt lời − giá vào);
-      nhịp nhanh (phân vị 75%) → sớm, trung vị → thường, chậm (25%) → muộn.
+    • Tốc độ: mỗi nhịp tăng cũ đi được bao nhiêu ATR mỗi nến → số nến cần để đi (chốt lời − giá vào),
+      nhân hệ số hiệu chỉnh từ backtest (HIEU_CHINH_TG) → sớm / thường / muộn.
     • Fibonacci thời gian (LEVEL 1): đáy hồi + 0.618 / 1 / 1.618 × độ dài nhịp tăng trước."""
     tg = ThoiGian(khung=kqk.khung, tu_ngay=df.index[-1])
     if not gia_vao or not chot_loi or chot_loi <= gia_vao or len(df) < 40:
@@ -309,8 +313,10 @@ def du_kien_thoi_gian(df: pd.DataFrame, kqk: KetQuaKhung, gia_vao: float, chot_l
     a_now = atr[-1]
     if toc and a_now > 0:
         can = (chot_loi - gia_vao) / a_now
-        q = pd.Series(toc).quantile([0.25, 0.5, 0.75])
-        tg.muon, tg.thuong, tg.som = (min(250, max(1, can / v)) if v > 0 else None for v in q)
+        v = float(pd.Series(toc).median())
+        if v > 0:
+            co_so = can / v                      # số nến nếu đi nhanh như nhịp cũ (thường quá lạc quan)
+            tg.som, tg.thuong, tg.muon = (min(250, max(1, co_so * h)) for h in HIEU_CHINH_TG)
     if nhip:
         i0, i1, _, _ = nhip[-1]
         T = i1 - i0

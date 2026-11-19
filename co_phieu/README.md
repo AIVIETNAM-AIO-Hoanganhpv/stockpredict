@@ -86,6 +86,11 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
     để đi từ giá mua tới chốt lời. Kết quả là khoảng **sớm – thường – muộn**.
   - **Theo Fibonacci thời gian**: đáy hồi cộng 0.618 / 1 / 1.618 lần độ dài nhịp tăng trước.
   - Ngày tính theo phiên giao dịch: bỏ thứ 7, chủ nhật, chưa trừ ngày lễ.
+  - **Kiểm định** trên 170 lệnh Mua chạm chốt lời:
+    - Bản đầu đoán **nhanh hơn thực tế khoảng 2,7 lần** (dự kiến 5 phiên, thực tế trung vị 16 phiên).
+    - Đã hiệu chỉnh: sớm ×1,45 / thường ×2,68 / muộn ×4,61. Kiểm tra trên nửa dữ liệu còn lại: khoảng 53% lệnh nằm trong
+      khoảng dự kiến, sai số trung vị 7,5 phiên. Đoán cố định "16 phiên" cho mọi lệnh sai 9 phiên, nên mức cải thiện là nhỏ.
+    - Fibonacci thời gian lệch xa hơn: thực tế dài gấp khoảng 6 lần. Công cụ chỉ hiện để tham khảo.
   - Hiện ở: thẻ khuyến nghị, bảng Nên mua (cột "Dự kiến chốt lời"), tab Danh mục (số phiên còn lại), TradingView
     (đường dọc kèm nhãn số phiên).
 - **Tính lãi**: nhập số vốn → số cổ phiếu (lô 100), tiền và % lãi khi chạm chốt lời, tiền lỗ khi chạm cắt lỗ.
@@ -141,6 +146,7 @@ Lệnh chạy: `py du_doan.py --kiem-dinh` (10–20 phút). Kết quả đầy �
 | Tín hiệu **Mua mạnh** (92 lệnh) | thắng 24%, TB **−2,4%**/lệnh |
 | Lệnh chờ ở vùng mua (2.745 lệnh khớp) | thắng 25%, TB 0% |
 | **Bán ở đỉnh** (2.946 lần) | đúng 50% (giá thấp hơn sau 20 phiên), giá còn tăng TB +1,8% |
+| Mua + sức khỏe tài chính ≥ 4★ & đang lãi (188 lệnh) | thắng 34%, TB 0% (các nhóm khác: thắng 26–27%, TB −0,9 đến −1,2%) |
 
 **Kết luận thẳng thắn:** ở cấu hình hiện tại, tín hiệu Mua và Bán ở đỉnh **chưa tốt hơn mua/bán ngẫu nhiên**.
 Lý do chính là cắt lỗ quá gần (0,5 ATR dưới vùng mua): 70% số lệnh bị cắt lỗ sau khoảng 17 phiên.
