@@ -4,6 +4,7 @@ Chạy trên máy:      py -m streamlit run web_app.py   (hoặc bấm run_web.b
 Đưa lên mạng:       Streamlit Community Cloud, file chính co_phieu/web_app.py
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -99,7 +100,9 @@ def chi_tiet(kq, tl, tab: str):
 
 # ------------------------------------------------------------------------------------------ khuyến nghị
 TAM = {"Ngắn hạn – khung ngày (1–3 tháng)": "D", "Trung hạn – khung tuần (3–9 tháng)": "W"}
-FILE_TT = HERE / "bao_cao" / "thi_truong.json"
+# Thư mục báo cáo (đổi được bằng biến môi trường CO_PHIEU_BAO_CAO – test dùng thư mục tạm, không ghi đè dữ liệu thật)
+BAO_CAO = Path(os.environ.get("CO_PHIEU_BAO_CAO", HERE / "bao_cao"))
+FILE_TT = BAO_CAO / "thi_truong.json"
 FILE_DM = HERE / "danh_muc.csv"
 
 
@@ -191,7 +194,7 @@ def quet_ngay(kho, san, gtgd_min):
                **{f"ban_{t}": quet.bang_ban(kq, t) for t in ("D", "W")},
                **{f"nganh_{t}": quet.suc_manh_nganh(kq, t) for t in ("D", "W")})
     try:
-        quet.ghi(HERE / "bao_cao", kq)            # cũng lưu bản khuyến nghị của ngày (tab "Theo ngày")
+        quet.ghi(BAO_CAO, kq)            # cũng lưu bản khuyến nghị của ngày (tab "Theo ngày")
     except Exception:
         pass
     thanh.empty()
@@ -599,7 +602,7 @@ def gia_ngay(ma):
 
 
 def tim_ngay():
-    return LS.ds_ngay(HERE / "bao_cao" / "lich_su")
+    return LS.ds_ngay(BAO_CAO / "lich_su")
 
 
 with tab_ngay:
@@ -615,7 +618,7 @@ with tab_ngay:
                                 .replace("Monday", "Thứ 2").replace("Tuesday", "Thứ 3").replace("Wednesday", "Thứ 4")
                                 .replace("Thursday", "Thứ 5").replace("Friday", "Thứ 6").replace("Saturday", "Thứ 7")
                                 .replace("Sunday", "CN"), key="ls_ngay")
-            ban = LS.doc_ngay(ngay, HERE / "bao_cao" / "lich_su")
+            ban = LS.doc_ngay(ngay, BAO_CAO / "lich_su")
             st.caption(f"Bản quét lúc {ban.get('luc')} · tầm {'ngắn hạn (D)' if tam == 'D' else 'trung hạn (W)'} "
                        "(đổi ở ⚙ Cài đặt chung)")
             loai = st.radio("Danh sách", ["Nên mua", "Bán ở đỉnh"], horizontal=True, key="ls_loai")
@@ -654,7 +657,7 @@ with tab_ngay:
                 c1, c2 = st.columns(2)
                 a = c1.selectbox("Ngày", ngay_co, index=0, key="ss_a")
                 bb = c2.selectbox("So với", ngay_co, index=1, key="ss_b")
-                ss = LS.so_sanh(LS.doc_ngay(a, HERE / "bao_cao" / "lich_su"), LS.doc_ngay(bb, HERE / "bao_cao" / "lich_su"), tam)
+                ss = LS.so_sanh(LS.doc_ngay(a, BAO_CAO / "lich_su"), LS.doc_ngay(bb, BAO_CAO / "lich_su"), tam)
                 for ten, k in (("Mua / Mua mạnh", "mua"), ("Chờ về vùng mua", "cho"), ("Bán ở đỉnh", "ban")):
                     x = ss[k]
                     st.markdown(f"##### {ten}")
@@ -662,7 +665,7 @@ with tab_ngay:
                                 + "  \n🔴 **Bị loại:** " + (", ".join(f"`{r['Mã']}`" for r in x["bi_loai"]) or "–")
                                 + f"  \n⚪ Giữ nguyên: {len(x['giu_nguyen'])} mã")
         else:
-            moi = LS.doc_ngay(ngay_co[0], HERE / "bao_cao" / "lich_su")
+            moi = LS.doc_ngay(ngay_co[0], BAO_CAO / "lich_su")
             dm_ma = []
             if "dm" in st.session_state:
                 dm_ma = [str(m).strip().upper() for m in st.session_state["dm"].get("Mã", []) if str(m).strip()]

@@ -18,6 +18,22 @@ MAU = json.loads(gzip.decompress((Path(__file__).parent / "du_lieu" / "co_ban_ma
 
 
 @pytest.fixture(autouse=True)
+def bao_cao_tam(monkeypatch, tmp_path):
+    """Web app đọc/ghi báo cáo trong thư mục tạm (bản sao báo cáo thật) – không bao giờ ghi đè bao_cao/."""
+    import shutil
+    goc = ROOT / "bao_cao"
+    tam = tmp_path / "bao_cao"
+    tam.mkdir()
+    for ten in ("thi_truong.json",):
+        if (goc / ten).exists():
+            shutil.copy(goc / ten, tam / ten)
+    if (goc / "lich_su").exists():
+        shutil.copytree(goc / "lich_su", tam / "lich_su")
+    monkeypatch.setenv("CO_PHIEU_BAO_CAO", str(tam))
+    yield tam
+
+
+@pytest.fixture(autouse=True)
 def khong_goi_mang(monkeypatch, tmp_path):
     try:
         from dudoan import co_ban

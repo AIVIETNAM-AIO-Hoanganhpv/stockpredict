@@ -147,5 +147,6 @@ def test_tab_theo_ngay(gia_gia):
 
 
 def LS_CO_BAN():
+    import os
     from dudoan import lich_su
-    return bool(lich_su.ds_ngay())
+    return bool(lich_su.ds_ngay(Path(os.environ["CO_PHIEU_BAO_CAO"]) / "lich_su"))
