@@ -309,7 +309,7 @@
   const indFavs = () => App.store.get('indFavs', ['ma', 'ema', 'rsi', 'macd', 'bb', 'volume']);
   U.indSheet = function (tab) {
     let cur = tab || App.store.get('indTab', 'ind'), q = '';
-    const tabs = [['fav', 'Yêu thích'], ['ind', 'Các chỉ báo'], ['strategy', 'Chiến lược'], ['profile', 'Hồ sơ'], ['pattern', 'Mô hình'], ['options', 'Options'], ['tpl', 'Mẫu']];
+    const tabs = [['fav', 'Yêu thích'], ['stockpredict', 'StockPredict'], ['ind', 'Các chỉ báo'], ['strategy', 'Chiến lược'], ['profile', 'Hồ sơ'], ['pattern', 'Mô hình'], ['options', 'Options'], ['tpl', 'Mẫu']];
     const s = U.sheet({ id: 'ind', title: 'Chỉ báo, chỉ số và chiến lược', cls: 'wide', body: `<div class="search">${ic('search')}<input placeholder="Tìm kiếm" id="iQ"></div><div class="chips" id="iTabs"></div><div class="ilist" id="iList"></div>` });
     const row = d => {
       const fav = indFavs().includes(d.id), cnt = App.chart.inds.filter(x => x.id === d.id).length;
@@ -326,7 +326,8 @@
       else if (cur === 'pattern') {
         h = '<div class="isec">Mô hình biểu đồ</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'chart').map(row).join('')
           + '<div class="isec">Mô hình nến</div>' + all.filter(d => d.cat === 'pattern' && d.sub === 'candle').sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
-      } else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
+      } else if (cur === 'stockpredict') h = ['sp_plan', 'st_stockpredict'].map(id => App.INDICATORS[id]).filter(Boolean).map(row).join('');
+      else if (cur === 'tpl') { U.close('ind'); return App.panels.templates(); }
       else h = all.filter(d => d.cat === cur).sort((a, b) => a.name.localeCompare(b.name)).map(row).join('');
       $('#iList').innerHTML = h;
     };
@@ -432,6 +433,7 @@
    * CHỌN MÃ (mở / so sánh / thêm vào danh sách)
    * ========================================================= */
   const CHIPS = {
+    SP: ['VNINDEX', 'VN30', 'FPT', 'HPG', 'VCB', 'MWG', 'SSI', 'VNM', 'TCB', 'VIX', 'PLC'],
     BINANCE: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'PAXGUSDT'],
     VN: ['VNINDEX', 'VN30', 'VNM', 'FPT', 'HPG', 'VCB', 'MWG', 'SSI', 'VIC', 'TCB', 'VIX'],
     TD: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'NFLX', 'EUR/USD', 'USD/JPY', 'XAU/USD', 'SPX', 'DXY'],

@@ -44,7 +44,7 @@
       if (token !== App.state.token) return;
       const msg = e && e.name === 'AbortError' ? 'Hết thời gian chờ' : (e && e.message) || 'Lỗi không rõ';
       App.setStatus('err', 'Lỗi: ' + msg);
-      if (!opts.quiet) App.toast(`Không tải được ${sym}: ${msg}${src === 'VN' ? ' — thử điền Proxy trong Nguồn dữ liệu' : ''}`, 'err', 6500);
+      if (!opts.quiet) App.toast(`Không tải được ${sym}: ${msg}${src === 'VN' || src === 'TCBS' ? ' — trình duyệt bị chặn: mở GreenView bằng co_phieu/chay_greenview.bat rồi chọn nguồn "StockPredict (giá VN)"' : ''}`, 'err', 6500);
       if (App.state.bars.length) { const cur = App.sources[App.state.src], t2 = App.state.token; stopLive = cur.live(App.state.sym, App.state.tf, bar => { if (t2 === App.state.token) App.chart.updateBar(bar); }); }
       return false;
     } finally { if (token === App.state.token) $('#loading').classList.add('hidden'); }
@@ -94,7 +94,15 @@
 
     // Connector của Claude (chỉ có khi mở trong Claude) — chờ tối đa ~10 giây
     App.mcpReady = (async () => { try { if (window.claude && window.claude.use) App.mcp = await window.claude.use('mcp'); } catch (e) { App.mcp = null; } return App.mcp; })();
-    const last = App.store.get('last', { src: 'BINANCE', sym: 'BTCUSDT', tf: '1h' });
+    // Mở từ StockPredict: dữ liệu nhúng sẵn (web app) hoặc máy chủ giá trên máy (chay_greenview.bat)
+    const spAuto = () => { if (!App.chart.inds.some(x => x.id === 'sp_plan')) App.chart.addIndicator('sp_plan'); };
+    if (window.GV_DATA && window.GV_DATA.bars) {
+      if (await App.loadSymbol('SP', window.GV_DATA.ma, '1D', { quiet: true, fallback: true })) { spAuto(); App.panels.refreshQuotes(); return; }
+    }
+    const last = App.store.get('last', window.GV_API != null ? { src: 'SP', sym: 'VNINDEX', tf: '1D' } : { src: 'BINANCE', sym: 'BTCUSDT', tf: '1h' });
+    if (window.GV_API != null && (last.src === 'VN' || last.src === 'TCBS')) { last.src = 'SP'; if (!['1D', '1W', '1M'].includes(last.tf)) last.tf = '1D'; }
+    if (window.GV_API != null && last.src === 'SP') spAuto();
+    if (last.src === 'SP' && window.GV_API == null) { last.src = 'BINANCE'; last.sym = 'BTCUSDT'; last.tf = '1h'; }
     if (last.src === 'TCBS') await App.mcpReady;
     let ok = await App.loadSymbol(last.src, last.sym, last.tf, { quiet: true });
     if (!ok && last.src !== 'BINANCE') ok = await App.loadSymbol('BINANCE', 'BTCUSDT', '1h', { quiet: true });

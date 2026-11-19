@@ -1,5 +1,6 @@
 """Tải dữ liệu giá:
   • Vietcap (trading.vietcap.com.vn) – cổ phiếu & chỉ số VN, toàn bộ HOSE/HNX/UPCoM (giá đã điều chỉnh)
+  • VNDirect (dchart-api.vndirect.com.vn) – dự phòng khi Vietcap chặn (VD: Streamlit Cloud)
   • vnstock (nếu đã cài) – dự phòng cho cổ phiếu VN
   • Yahoo Finance – forex, vàng, cổ phiếu quốc tế (và dự phòng cho cổ phiếu VN, đuôi .VN)
   • file CSV/Excel tự tải.
@@ -255,12 +256,43 @@ def yahoo_symbol(loai: str, ma: str) -> str:
     return ma
 
 
+# ------------------------------------------------------------------------- VNDirect (dự phòng)
+VND_API = "https://dchart-api.vndirect.com.vn/dchart/history"
+VND_KHUNG = {"D": ("D", 86400 * 1.6), "1H": ("60", 3600 * 6), "15m": ("15", 900 * 20)}
+
+
+def _vnd(ma: str, khung: str = "D", so_nen: int = 1300) -> pd.DataFrame:
+    """Giá một mã từ VNDirect – dùng khi Vietcap chặn (VD: máy chủ Streamlit Cloud bị 403).
+    VNDirect tính giá cổ phiếu theo nghìn đồng → nhân 1000 cho khớp Vietcap (chỉ số giữ nguyên)."""
+    res, giay = VND_KHUNG[khung]
+    den = int(time.time()) + 86400
+    ten = {"HNXINDEX": "HNX", "UPCOMINDEX": "UPCOM"}.get(ma, ma)
+    url = f"{VND_API}?resolution={res}&symbol={ten}&from={int(den - so_nen * giay)}&to={den}"
+    req = urllib.request.Request(url, headers={"Accept": "*/*", "User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        raw = r.read()
+    try:
+        x = json.loads(raw)
+    except ValueError:
+        raise RuntimeError(f"VNDirect trả về dữ liệu lạ cho {ma}") from None
+    if x.get("s") != "ok" or not x.get("c"):
+        raise RuntimeError(f"VNDirect không có dữ liệu cho {ma}")
+    df = pd.DataFrame({"open": x["o"], "high": x["h"], "low": x["l"], "close": x["c"], "volume": x["v"]},
+                      index=pd.to_datetime([int(t) for t in x["t"]], unit="s"))
+    if khung == "D":
+        df.index = df.index.normalize()
+    df = df.apply(pd.to_numeric, errors="coerce").dropna(subset=["close"]).sort_index()
+    if ma not in CHI_SO_VN:
+        df[["open", "high", "low", "close"]] = (df[["open", "high", "low", "close"]] * 1000).round(0)
+    return df[~df.index.duplicated(keep="last")].iloc[-so_nen:]
+
+
 _CACHE: dict = {}
 HAN_CACHE = 300          # giây: dữ liệu tải về được dùng lại trong 5 phút
 
 
 def tai(ma: str, khung: str) -> pd.DataFrame:
-    """Tải dữ liệu cho một mã và một khung. Cổ phiếu VN: Vietcap → vnstock → Yahoo.
+    """Tải dữ liệu cho một mã và một khung. Cổ phiếu VN: Vietcap → VNDirect → vnstock → Yahoo.
     Khung W/M được dựng lại từ dữ liệu ngày để giá giữa các khung luôn khớp nhau."""
     if khung in ("W", "M"):
         return resample(tai(ma, "D"), khung)
@@ -279,6 +311,10 @@ def _tai(ma: str, khung: str) -> pd.DataFrame:
             return _vci(ma, khung)
         except Exception as e:
             loi.append(f"Vietcap: {e}")
+        try:
+            return _vnd(ma, khung)
+        except Exception as e:
+            loi.append(f"VNDirect: {e}")
         if khung == "D":
             try:
                 return _vnstock(ma, khung)
