@@ -84,6 +84,29 @@ py du_doan.py --quet-thi-truong --san HSX --gtgd 5 --von 200000000
 - **Tính lãi**: nhập số vốn → số cổ phiếu (lô 100), tiền và % lãi khi chạm chốt lời, tiền lỗ khi chạm cắt lỗ.
   Đã trừ phí mua 0,15%, phí bán 0,15% và thuế bán 0,1%.
 
+## Thông tin doanh nghiệp & báo cáo tài chính (nguồn: Vietcap)
+```
+py du_doan.py --doanh-nghiep FPT HPG     # hồ sơ, sức khỏe tài chính, xuất BCTC ra bao_cao/<MÃ>_tai_chinh.xlsx
+```
+- **Hồ sơ**: tên, ngành, vốn hóa, số cổ phiếu, ngày niêm yết, giới thiệu, % sở hữu nước ngoài/nhà nước,
+  cao/thấp 52 tuần, **cổ đông lớn & ban lãnh đạo**.
+- **Khuyến nghị của CTCK** (Vietcap Securities): MUA/NẮM GIỮ/BÁN, giá mục tiêu, ngày. Đây là ý kiến của bên thứ ba.
+- **Báo cáo tài chính**: Kết quả kinh doanh, Cân đối kế toán, Lưu chuyển tiền tệ. Lấy 5 năm và 8 quý gần nhất,
+  đơn vị tỷ đồng. Hỗ trợ đủ doanh nghiệp thường, ngân hàng, chứng khoán và bảo hiểm.
+- **Chỉ số**: P/E, P/B, P/S, EV/EBITDA, ROE, ROA, biên lợi nhuận, nợ vay/vốn chủ, cổ tức. Ngân hàng có thêm NIM, nợ xấu, CASA.
+- **Sức khỏe tài chính 1–5★** = trung bình 4 mục:
+  - Tăng trưởng: lợi nhuận và doanh thu 4 quý so với 4 quý trước.
+  - Sinh lời: ROE. Đang lỗ thì 1★.
+  - An toàn: nợ vay/vốn chủ. Ngân hàng tính vốn chủ/tổng tài sản.
+  - Định giá: P/E hiện tại so với chính mã đó trong 3 năm.
+
+  Điểm chỉ dùng các báo cáo **đã công bố** tính đến thời điểm chấm (theo ngày công bố), nên dùng được cho backtest.
+- **Ảnh hưởng tới khuyến nghị mua**: sức khỏe từ 4 trở lên được +10 điểm; từ 2 trở xuống bị −10 điểm;
+  doanh nghiệp đang lỗ bị −15 điểm. Hai trường hợp sau không được xếp "Mua mạnh".
+- **Web app**:
+  - Tab Tra cứu có 4 mục: Kỹ thuật / Doanh nghiệp / Tài chính / Chỉ số, kèm nút tải Excel.
+  - Tab **Bộ lọc** lọc theo P/E, ROE, tăng trưởng lợi nhuận, nợ, sức khỏe, CTCK, cùng khuyến nghị kỹ thuật.
+
 ## Kết quả kiểm định trên dữ liệu quá khứ (19/11/2026)
 Lệnh chạy: `py du_doan.py --kiem-dinh` (10–20 phút). Kết quả đầy đủ ở `bao_cao/kiem_dinh.md`.
 - **Phạm vi:** 267 mã đủ thanh khoản, khoảng 2 năm, 26.529 điểm thời gian.
@@ -156,6 +179,8 @@ dudoan/du_lieu.py    tải dữ liệu (Yahoo, vnstock, CSV/Excel)
 dudoan/bao_cao.py    báo cáo HTML + biểu đồ, Markdown, Excel
 dudoan/khuyen_nghi.py vùng mua đẹp, khuyến nghị, tính lãi/lỗ, đánh giá danh mục
 dudoan/quet.py       quét toàn thị trường VN, xếp hạng
+dudoan/co_ban.py     hồ sơ doanh nghiệp, BCTC, chỉ số, sức khỏe tài chính
+dudoan/kiem_dinh.py  backtest tín hiệu
 du_lieu_ma/ma_vn.csv danh sách mã HOSE/HNX/UPCoM (tự cập nhật)
 tests/               kiểm tra bằng dữ liệu giả lập
 ```

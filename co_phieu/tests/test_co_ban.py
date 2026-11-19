@@ -69,3 +69,11 @@ def test_xuat_excel(tmp_path):
     sheets = pd.read_excel(p, sheet_name=None)
     assert "Hồ sơ" in sheets and "Cổ đông lớn" in sheets
     assert any(s.startswith("Kết quả kinh doanh") for s in sheets)
+
+
+def test_cli_doanh_nghiep(tmp_path, capsys):
+    import du_doan
+    rc = du_doan.main(["--doanh-nghiep", "FPT", "ZZZ", "--thu-muc", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0 and "Sức khỏe tài chính" in out and "ZZZ" in out
+    assert (tmp_path / "FPT_tai_chinh.xlsx").exists()

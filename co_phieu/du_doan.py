@@ -6,6 +6,7 @@ Ví dụ:
   py du_doan.py --file gia_FPT.csv --ten FPT     dùng file giá tự tải (cột Ngày, Mở, Cao, Thấp, Đóng, KL)
   py du_doan.py --quet-thi-truong              quét toàn bộ HOSE/HNX/UPCoM → khuyến nghị mua, xếp hạng
   py du_doan.py --kiem-dinh                    backtest tín hiệu Mua / Bán ở đỉnh trên các mã đủ thanh khoản
+  py du_doan.py --doanh-nghiep FPT HPG         hồ sơ, sức khỏe tài chính, xuất BCTC ra Excel (bao_cao/)
 """
 import argparse
 import sys
@@ -66,6 +67,8 @@ def main(argv=None):
     ap.add_argument("--von", type=float, default=100e6, help="số vốn mỗi lệnh để tính lãi (đồng)")
     ap.add_argument("--kiem-dinh", action="store_true",
                     help="backtest tín hiệu trên các mã đủ thanh khoản (cần chạy --quet-thi-truong trước)")
+    ap.add_argument("--doanh-nghiep", action="store_true",
+                    help="thông tin doanh nghiệp + BCTC của các mã (xuất Excel vào thư mục báo cáo)")
     a = ap.parse_args(argv)
 
     if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -78,6 +81,8 @@ def main(argv=None):
         return quet_thi_truong(a)
     if a.kiem_dinh:
         return kiem_dinh(a)
+    if a.doanh_nghiep:
+        return doanh_nghiep(a)
 
     jobs = []
     if a.file:
@@ -107,6 +112,38 @@ def main(argv=None):
         print(f"Đã ghi báo cáo: {path}")
     print(bao_cao.CANH_BAO)
     return 0 if any(k.khung for k in ket_qua) else 1
+
+
+def doanh_nghiep(a):
+    from dudoan import co_ban as CB
+    if not a.ma:
+        print("Ghi mã sau lệnh, VD: py du_doan.py --doanh-nghiep FPT")
+        return 1
+    sao = lambda x: "★" * int(round(x)) + "☆" * (5 - int(round(x)))  # noqa: E731
+    for ma in [m.upper() for m in a.ma]:
+        try:
+            hs = CB.ho_so(ma)
+        except Exception as e:
+            print(f"{ma}: không tải được thông tin – {e}\n")
+            continue
+        if not hs:
+            print(f"{ma}: không có thông tin doanh nghiệp.\n")
+            continue
+        print(f"{ma} – {hs['ten']}")
+        print(f"  Ngành: {hs['nganh']} · vốn hóa {hs['von_hoa'] / 1e12:,.1f} nghìn tỷ · "
+              f"nước ngoài sở hữu {hs['nuoc_ngoai'] or 0:.1%}")
+        if hs.get("ctck"):
+            ck = hs["ctck"]
+            print(f"  CTCK ({ck['nguon']}): {ck['xep_hang']}, giá mục tiêu {ck['gia_muc_tieu']:,.0f} ({ck['ngay']})")
+        sk = CB.suc_khoe_hien_tai(ma)
+        if sk.du_lieu:
+            print(f"  Sức khỏe tài chính {sk.tong}/5: tăng trưởng {sao(sk.tang_truong)}, sinh lời {sao(sk.sinh_loi)}, "
+                  f"an toàn {sao(sk.an_toan)}, định giá {sao(sk.dinh_gia)}")
+            for d in sk.ly_do:
+                print("   •", d)
+        p = CB.xuat_excel(ma, Path(a.thu_muc) / f"{ma}_tai_chinh.xlsx")
+        print(f"  Đã xuất BCTC: {p}\n")
+    return 0
 
 
 def kiem_dinh(a):
