@@ -82,6 +82,23 @@
   };
   // Đặt nguồn StockPredict lên đầu danh sách
   App.sources = Object.assign({ SP: sp }, App.sources);
+  // Có máy chủ trên máy: nguồn "Cổ phiếu Việt Nam" bị trình duyệt chặn thì lấy giá qua StockPredict
+  if (hasApi()) {
+    const vn = App.sources.VN, f0 = vn.fetchBars.bind(vn), q0 = vn.quotes.bind(vn);
+    vn.fetchBars = async (sym, tf, before) => {
+      try { return await f0(sym, tf, before); }
+      catch (e) {
+        if (before || !sp.tfs.includes(tf)) throw e;
+        const k = App.isIndex(sym) ? 1 : 0.001;   // nguồn VN tính nghìn đồng
+        return (await sp.fetchBars(sym, tf)).map(b => ({ ...b, open: b.open * k, high: b.high * k, low: b.low * k, close: b.close * k }));
+      }
+    };
+    vn.quotes = async syms => {
+      const out = await q0(syms).catch(() => ({})), thieu = syms.filter(s => !out[s]);
+      if (thieu.length) { const r = await sp.quotes(thieu); thieu.forEach(s => { if (r[s]) out[s] = { price: App.isIndex(s) ? r[s].price : r[s].price / 1000, chg: r[s].chg }; }); }
+      return out;
+    };
+  }
 
   /* ---------------- Tiện ích thời gian ---------------- */
   // Nến cuối cùng có thời gian <= t (t là đầu ngày, cộng gần 1 ngày để khớp cả nguồn có cộng múi giờ)

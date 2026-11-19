@@ -3,6 +3,12 @@
 Chạy hoàn toàn trong trình duyệt, không cần cài đặt, không cần máy chủ.
 
 ## Cách dùng nhanh
+**Xem cổ phiếu Việt Nam kèm khuyến nghị:** bấm đúp `co_phieu/chay_greenview.bat` (cần Python). Trình duyệt tự mở
+GreenView với nguồn **StockPredict (giá VN)** và chỉ báo **Khuyến nghị StockPredict** (vùng mua, cắt lỗ, chốt lời,
+ngày chốt lời dự kiến, các lần báo Mua trước đây). Chiến lược **StockPredict — Dự đoán xu hướng** ở mục
+Chỉ báo › StockPredict, kết quả trong bảng *Kiểm tra chiến lược*. Trong web app (`co_phieu/run_web.bat`): mục Tra cứu ›
+bật "Xem bằng GreenView".
+
 1. Mở **`dist/GreenView.html`** bằng Chrome hoặc Edge trên máy tính (nháy đúp vào file). Bản này lấy được giá thật qua API.
 2. Bấm tên mã (góc trên trái) để đổi mã và nguồn dữ liệu. Có thể gõ thẳng chữ cái trên bàn phím để mở ô tìm mã.
 3. Nút ☀/🌙 đổi giữa hai giao diện: **Sáng xanh đậm** và **Ngọc lục bảo (tối)**.

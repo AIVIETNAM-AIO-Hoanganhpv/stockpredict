@@ -221,3 +221,9 @@ dudoan/kiem_dinh.py  backtest tín hiệu
 du_lieu_ma/ma_vn.csv danh sách mã HOSE/HNX/UPCoM (tự cập nhật)
 tests/               kiểm tra bằng dữ liệu giả lập
 ```
+
+## Biểu đồ GreenView có giá VN
+- Bấm đúp `chay_greenview.bat`: mở GreenView (thư mục `greenview/`) với giá cổ phiếu VN thật và khuyến nghị của công cụ.
+  Chương trình chạy một máy chủ nhỏ chỉ trong máy này (http://127.0.0.1:8765), lấy giá hộ trình duyệt.
+- Trong web app: mục chi tiết một mã › bật **Xem bằng GreenView**.
+- Giá VN: Vietcap, khi bị chặn (VD: Streamlit Cloud báo 403) tự chuyển sang VNDirect.

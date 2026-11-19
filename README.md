@@ -9,7 +9,9 @@
 ## Dùng nhanh (Windows)
 1. Trên GitHub bấm **Code → Download ZIP**, giải nén.
 2. Bấm đúp `co_phieu/run_web.bat` để mở web app, hoặc `co_phieu/run.bat` để chạy bằng dòng lệnh.
-3. Mở `greenview/dist/GreenView.html` bằng Chrome/Edge để xem biểu đồ.
+3. Bấm đúp `co_phieu/chay_greenview.bat` để mở biểu đồ GreenView có giá cổ phiếu Việt Nam và khuyến nghị của công cụ
+   (vùng mua, cắt lỗ, chốt lời, ngày chốt lời dự kiến, các lần báo Mua trước đây). Mở thẳng file
+   `greenview/dist/GreenView.html` thì trình duyệt chặn giá VN, chỉ xem được crypto/giả lập.
 
 Cần cài Python (https://www.python.org/downloads/). Lần đầu chạy, máy tự cài các thư viện cần thiết.
 

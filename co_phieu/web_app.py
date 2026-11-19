@@ -11,11 +11,12 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, co_ban as CB, du_lieu, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
+from dudoan import bao_cao, co_ban as CB, du_lieu, greenview as G, khuyen_nghi as K, lich_su as LS, quet, tin_tuc as TT  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -23,6 +24,12 @@ st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layou
 MAU = {1: "#16a34a", -1: "#dc2626", 0: "#64748b"}
 MUI_TEN = bao_cao.MUI_TEN
 _f = bao_cao._f
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def gv_goi(ma: str) -> dict:
+    """Dữ liệu cho GreenView (giá ngày + kế hoạch + tín hiệu quá khứ), dùng lại trong 30 phút."""
+    return G.goi_du_lieu(ma)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -85,6 +92,19 @@ def chi_tiet(kq, tl, tab: str):
                 st.caption("• " + g)
 
     st.markdown("##### Biểu đồ")
+    if st.toggle("Xem bằng GreenView (kèm vùng mua, cắt lỗ, chốt lời và các lần báo Mua trước đây)",
+                 key=f"gv_{tab}_{kq.ma}"):
+        with st.spinner("Đang dựng GreenView (lần đầu ~10–20 giây)…"):
+            try:
+                html = G.html_nhung(gv_goi(kq.ma))
+            except Exception as e:
+                html = None
+                st.info(f"Chưa mở được GreenView cho {kq.ma}: {str(e)[:150]}")
+        if html:
+            components.html(html, height=720, scrolling=False)
+            st.caption("Kéo để xem lại quá khứ, chụm 2 ngón để phóng to. Bảng \"Kiểm tra chiến lược\": "
+                       "Chỉ báo › StockPredict › \"StockPredict — Dự đoán xu hướng\".")
+        return
     ten_khung = [k.khung for k in kq.khung]
     chon = st.radio("Khung", ten_khung, index=ten_khung.index(kq.chinh.khung), horizontal=True,
                     key=f"khung_{tab}_{kq.ma}", label_visibility="collapsed")

@@ -112,16 +112,21 @@ def tin_hieu_qua_khu(ma: str, df: pd.DataFrame, so_phien: int = 500, buoc: int =
     return ra
 
 
+def nen(df: pd.DataFrame) -> list[dict]:
+    """Nến dạng GreenView: time = giây (đầu ngày, UTC), giá giữ nguyên đơn vị của nguồn."""
+    df = df.dropna(subset=["open", "high", "low", "close"])
+    return [{"time": int(t.timestamp()), "open": _so(r.open, 4), "high": _so(r.high, 4), "low": _so(r.low, 4),
+             "close": _so(r.close, 4), "volume": _so(r.volume, 0) or 0}
+            for t, r in zip(df.index, df.itertuples(index=False))]
+
+
 def goi_du_lieu(ma: str, df: pd.DataFrame | None = None, qua_khu: bool = True, so_nen: int = 1500) -> dict:
     """Gói dữ liệu cho GreenView: nến ngày + kế hoạch + tín hiệu quá khứ."""
     ma = ma.strip().upper()
     if df is None:
         df = du_lieu.tai(ma, "D")
     df = df.dropna(subset=["open", "high", "low", "close"]).iloc[-so_nen:]
-    bars = [{"time": int(t.timestamp()), "open": _so(r.open, 4), "high": _so(r.high, 4), "low": _so(r.low, 4),
-             "close": _so(r.close, 4), "volume": _so(r.volume, 0) or 0}
-            for t, r in zip(df.index, df.itertuples(index=False))]
-    goi = {"ma": ma, "bars": bars, "luc": dt.datetime.now().strftime("%d/%m/%Y %H:%M")}
+    goi = {"ma": ma, "bars": nen(df), "luc": dt.datetime.now().strftime("%d/%m/%Y %H:%M")}
     try:
         goi["ke_hoach"] = ke_hoach(ma, df)
     except Exception as e:
@@ -140,7 +145,7 @@ def html_nhung(du_lieu_goi: dict | None = None, api: str | None = None) -> str:
     cau_hinh = "<script>"
     if du_lieu_goi is not None:
         cau_hinh += "window.GV_DATA=" + json.dumps(du_lieu_goi, ensure_ascii=False).replace("</", "<\\/") + ";"
-    if api:
+    if api is not None:
         cau_hinh += "window.GV_API=" + json.dumps(api) + ";"
     cau_hinh += "</script>"
     return html.replace("<head>", "<head>" + cau_hinh, 1)
