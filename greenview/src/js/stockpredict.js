@@ -571,8 +571,12 @@
       const hug = T.sma(c.map((x, i) => Math.abs(x - ma[10][i])), 20).map((x, i) => x / atr[i]);
       const cap = i => hug[i] <= 0.874 ? [10, 20] : [6, 10];
       const tren = (i, cp) => ma[cp[0]][i] > ma[cp[1]][i];
-      const maLen = j => { const cp = cap(j); if (!(tren(j, cp) && j && !tren(j - 1, cp))) return false; return c[j] > ma[cp[0]][j] && c[j] > ma[cp[1]][j]; };
+      const maLen = j => {   // MA tín hiệu cắt lên MA điều kiện trong ≤ 3 nến gần nhất và vẫn nằm trên (giống LEVEL 1)
+        const cp = cap(j); let cat = false;
+        for (let x = Math.max(1, j - 2); x <= j; x++) { let deu = true; for (let q = x; q <= j; q++) if (!tren(q, cp)) deu = false; if (deu && !tren(x - 1, cp)) cat = true; }
+        return cat && c[j] > ma[cp[0]][j] && c[j] > ma[cp[1]][j]; };
       const banTF = I.lenh === 'Lệnh tháng' ? P.banM : P.banW;
+      const mDay = T.sub(T.ema(c, 12), T.ema(c, 26)), sDay = T.ema(mDay, 9);
       let lan = 0;
       const R = {
         vt(j) {
@@ -586,9 +590,9 @@
           if (!ok) return null; const sl = dayGanNhat(D, j); return sl != null ? { stop: sl } : null;
         },
         banPhan: I.ban === 'Bán 70% rồi bán nốt' ? (i => banTF[i] && ++lan === 1) : null,
-        banHet: i => I.ban === 'Bán 70% rồi bán nốt' ? (banTF[i] && lan >= 1) : banTF[i],
+        banHet: i => I.ban === 'Bán 70% rồi bán nốt' ? (lan >= 1 && (banTF[i] || (mDay[i] < sDay[i] && mDay[i - 1] >= sDay[i - 1]))) : banTF[i],
         tenBan: `Tín hiệu bán MACD+Sto ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'}`,
-        note: `Đồng pha: chỉ vào khi Ngày + Tuần + Tháng cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD trên tín hiệu, Sto 13-13-5 %K>%D); vào lệnh theo tín hiệu khung ngày (${I.vao}); bán theo tín hiệu bán MACD+Sto khung ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'} hoặc cắt lỗ đáy ngày gần nhất. CHƯA có kết quả kiểm định – đang backtest.`
+        note: `Đồng pha: chỉ vào khi Ngày + Tuần + Tháng cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD trên tín hiệu, Sto 13-13-5 %K>%D); vào lệnh theo tín hiệu khung ngày (${I.vao}); bán theo tín hiệu bán MACD+Sto khung ${I.lenh === 'Lệnh tháng' ? 'tháng' : 'tuần'} hoặc cắt lỗ đáy ngày gần nhất. Kiểm định chứng khoán VN 2020–2026 (vốn 1 tỷ): +16,9%/năm nhưng 97% lợi nhuận từ 1 lệnh HQC – bỏ HQC còn +3,9%/năm (mua & giữ +9,8%); vào ngẫu nhiên trong ngày đồng pha +6,6%. Chưa có lợi thế đáng tin.`
       };
       return moPhongLo(D, R, I);
     }
