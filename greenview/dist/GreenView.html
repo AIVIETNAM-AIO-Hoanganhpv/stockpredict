@@ -2638,7 +2638,7 @@ window.App = window.App || {};
         lo = lo.filter(l => l.q > 1e-12); cho = null;
       }
       // 2) cắt lỗ trong phiên (mỗi lệnh 1 mức)
-      if (!R.catDong) lo.forEach(l => { if (D.l[i] < l.stop) { dong(l, i, Math.min(D.o[i], l.stop), 1, 'Cắt lỗ'); mk.push({ i, pos: 'belowBar', shape: 'square', color: '#f23645', text: 'Cắt lỗ' }); } });
+      if (!R.catDong && !R.khongCatLo) lo.forEach(l => { if (D.l[i] < l.stop) { dong(l, i, Math.min(D.o[i], l.stop), 1, 'Cắt lỗ'); mk.push({ i, pos: 'belowBar', shape: 'square', color: '#f23645', text: 'Cắt lỗ' }); } });
       lo = lo.filter(l => l.q > 1e-12);
       // chốt lời tại mục tiêu (nếu có): giá cao trong phiên chạm mục tiêu
       const tpHit = lo.find(l => l.tp && D.h[i] >= l.tp);
@@ -2649,8 +2649,10 @@ window.App = window.App || {};
       // 3) tín hiệu ở giá đóng cửa → lệnh chờ phiên sau
       if (i < n - 1) {
         if (lo.length) {
+          // R.chiBanKhiLai: tín hiệu bán chỉ thực hiện khi cả vị thế đang LÃI RÒNG (đã trừ phí, thuế) ở giá đóng cửa
+          const laiRong = () => lo.reduce((a, l) => a + l.q * D.c[i] * (1 - phi - thue) - l.q * l.ep * (1 + phi), 0) > 0;
           if (R.catDong && lo.some(l => R.catDong(i, l))) cho = { k: 'het', why: 'Cắt lỗ' };
-          else if (R.banHet(i)) cho = { k: 'het' };
+          else if (R.banHet(i) && (!R.chiBanKhiLai || laiRong())) cho = { k: 'het' };
           else if (R.giuToiDa && D.t[i] - D.t[Math.min(...lo.map(l => l.ei))] >= R.giuToiDa) cho = { k: 'het', why: 'Hết thời gian giữ tối đa' };
           else if (!daBanPhan && R.banPhan && R.banPhan(i)) { cho = { k: 'phan' }; daBanPhan = true; }
           else if (!daBanPhan && fillVT != null && !lo.some(l => l.k === 'xn')) { const x = R.xn(i, fillVT); if (x) cho = { k: 'xn', stop: x.stop }; }
@@ -2915,7 +2917,8 @@ window.App = window.App || {};
   // cắt lỗ ở đáy sóng TUẦN gần nhất.
   DEFS.st_daihan = {
     id: 'st_daihan', name: 'Khoá học — Cổ phiếu trung/dài hạn: đồng pha, ADX tuần, giữ đến tín hiệu bán tháng', cat: 'strategy', overlay: true, plots: [], levels: [],
-    inputs: [['giu', 'Thời gian giữ', 'Trung hạn (tối đa 9 tháng)', 'sel', ['Trung hạn (tối đa 9 tháng)', 'Dài hạn (tối đa 10 năm)']],
+    inputs: [['banLai', 'Chỉ bán khi có lãi (không cắt lỗ, giữ tối đa 10 năm)', true, 'bool'],
+      ['giu', 'Thời gian giữ', 'Trung hạn (tối đa 9 tháng)', 'sel', ['Trung hạn (tối đa 9 tháng)', 'Dài hạn (tối đa 10 năm)']],
       ['lai', 'Lãi dự kiến Fibo tối thiểu (%, 0 = bỏ)', 0, 'float'], ['catMax', 'Cắt lỗ tối đa (%)', 15, 'float'],
       ['adx', 'ADX tuần tối thiểu (0 = tắt)', 25, 'float'], ['pha', 'Lọc pha thị trường VN (chỉ mua khi pha tốt, pha xấu bán hết)', true, 'bool'],
       ['vao', 'Tín hiệu vào (khung ngày)', '2MA hoặc MACD+Sto', 'sel', ['2MA hoặc MACD+Sto', '2MA', 'MACD+Sto']],
@@ -2964,10 +2967,10 @@ window.App = window.App || {};
           const ok = (I.vao !== 'MACD+Sto' && c[j] > ma[cap(j)[1]][j]) || (I.vao !== '2MA' && (S.XN1[j] || S.XN2[j] || S.XN3[j]));
           if (!ok) return null; const sl = dayTuan(j); return sl != null ? { stop: sl } : null;
         },
-        banPhan: null, banHet: i => P.banM[i] || (phaTot[i] === false && phaTot[i - 1] !== false), tenBan: 'Tín hiệu bán tháng / pha thị trường xấu', veTp, tpChiVe: true,
-        giuToiDa: (I.giu.startsWith('Dài') ? 3653 : 274) * 86400,
+        banPhan: null, banHet: i => P.banM[i] || (phaTot[i] === false && (I.banLai || phaTot[i - 1] !== false)), chiBanKhiLai: I.banLai, khongCatLo: I.banLai, tenBan: 'Tín hiệu bán tháng / pha thị trường xấu', veTp, tpChiVe: true,
+        giuToiDa: (I.banLai || I.giu.startsWith('Dài') ? 3653 : 274) * 86400,
         // cắt lỗ theo GIÁ ĐÓNG CỬA: nến TUẦN đóng dưới mức cắt lỗ, hoặc giá đóng cửa ngày đã giảm ≥ catMax% so với giá mua → bán phiên sau
-        catDong: (i, l) => (cuoiTuan[i] && c[i] < l.stop) || c[i] <= l.ep * (1 - I.catMax / 100),
+        catDong: I.banLai ? null : (i, l) => (cuoiTuan[i] && c[i] < l.stop) || c[i] <= l.ep * (1 - I.catMax / 100),
         note: `Dài hạn: vào khi Ngày + Tuần + Tháng đồng pha và có tín hiệu mua khung ngày (${I.vao}), ${I.pha ? 'chỉ khi pha thị trường VN tốt (pha xấu → bán hết), ' : ''}CHỈ khi ADX tuần ≥ ${I.adx} với DI+ > DI−, ${I.lai > 0 ? `lãi dự kiến tới Fibo 1,0 của CẢ sóng tháng và sóng tuần ≥ ${I.lai}% (đỉnh sóng đã xác nhận, hồi ≥ 23,6%), ` : ''}giá đã hồi về vùng hỗ trợ (≤ C + 50% đoạn C→B sóng tuần). Không tự bán ở Fibo: giữ đến tín hiệu bán MACD+Sto khung THÁNG, tối đa ${I.giu.startsWith('Dài') ? '10 năm' : '9 tháng'}; cắt lỗ khi nến TUẦN đóng cửa dưới đáy sóng tuần (mức không xa quá ${I.catMax}%), hoặc giá đóng cửa ngày đã giảm ${I.catMax}% so với giá mua. Chấm xám = có tín hiệu mua nhưng bỏ qua (<${I.lai}%: lãi dự kiến thấp/chưa có sóng; Chờ hồi: giá đang xa vùng hỗ trợ). Kiểm định VN 2000–2026 (1 tỷ, ADX 25): trung hạn −1,3%/năm, dài hạn −0,1%/năm giai đoạn 2014–2026 – không hơn vào ngẫu nhiên; lọc pha thị trường +10,6%/năm. Chưa có lợi thế.`
       };
       const r = moPhongLo(D, R, I);
