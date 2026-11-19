@@ -89,7 +89,9 @@ def test_tra_cuu_doanh_nghiep_fpt(gia_gia):
     at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
     assert not at.exception, at.exception
     nhan = [t.label for t in at.tabs]
-    assert {"🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số", "🔎 Bộ lọc"} <= set(nhan)
+    assert {"🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số", "📰 Tin tức", "🔎 Bộ lọc", "📰 Tin thị trường"} <= set(nhan)
+    assert any("Lịch sử trả cổ tức" in e.label for e in at.expander)
+    assert any("Công ty con" in e.label for e in at.expander)
     md = " ".join(m.value for m in at.markdown)
     assert "Công ty Cổ phần FPT" in md and "Sức khỏe tài chính" in md
     assert any("CTCK" in i.value for i in at.info)
@@ -115,3 +117,12 @@ def test_bo_loc_sau_khi_quet(gia_gia, monkeypatch):
     at.slider[0].set_value(1.0).run()
     assert not at.exception, at.exception
     assert any(m.label == "Số mã đạt" for m in at.metric)
+
+
+def test_tin_thi_truong_loc(gia_gia):
+    at = AppTest.from_file(str(ROOT / "web_app.py"), default_timeout=120).run()
+    md = " ".join(m.value for m in at.markdown)
+    assert "news.google.com" in md or "cafef" in md.lower()
+    at.text_input(key="tin_tk").set_value("FPT").run()
+    at.checkbox(key="tin_ma").check().run()
+    assert not at.exception, at.exception

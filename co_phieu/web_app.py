@@ -14,7 +14,7 @@ import streamlit as st
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dudoan import bao_cao, co_ban as CB, du_lieu, khuyen_nghi as K, quet  # noqa: E402
+from dudoan import bao_cao, co_ban as CB, du_lieu, khuyen_nghi as K, quet, tin_tuc as TT  # noqa: E402
 from du_doan import phan_tich_ma  # noqa: E402
 
 st.set_page_config(page_title="Dự đoán xu hướng", page_icon="📈", layout="centered")
@@ -262,8 +262,86 @@ def muc_doanh_nghiep(ma):
         with st.expander("Giới thiệu doanh nghiệp"):
             st.write(hs["gioi_thieu"])
     if not cd.empty:
-        st.markdown("##### Cổ đông lớn & ban lãnh đạo")
+        st.markdown("##### Cổ đông lớn")
         st.dataframe(cd.style.format({"Số CP": "{:,.0f}", "Tỷ lệ %": "{:.2f}%"}), hide_index=True, width="stretch")
+    mr = cb_mo_rong(ma)
+    so = {"Số CP": "{:,.0f}", "Tỷ lệ %": "{:.3f}%", "Sở hữu %": "{:.2f}%", "Vốn điều lệ (tỷ)": "{:,.1f}",
+          "Vốn góp (tỷ)": "{:,.1f}", "Cổ tức %": "{:.2f}%", "Tiền/CP (đ)": "{:,.0f}", "Đăng ký": "{:,.0f}",
+          "Thực hiện": "{:,.0f}", "Sở hữu sau GD": "{:,.0f}"}
+    for tieu_de, k in (("Ban lãnh đạo", "bld"), ("Công ty con, liên kết", "con"), ("Lịch sử trả cổ tức", "cotuc"),
+                       ("Sự kiện doanh nghiệp", "sukien"), ("Giao dịch nội bộ", "noibo")):
+        b = mr.get(k)
+        if b is not None and not b.empty:
+            with st.expander(f"{tieu_de} ({len(b)})", expanded=k in ("cotuc",)):
+                st.dataframe(b.style.format({c: f for c, f in so.items() if c in b}, na_rep="–"),
+                             hide_index=True, width="stretch")
+    st.caption("Công ty kiểm toán: chưa có nguồn dữ liệu công khai lấy được tự động.")
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cb_mo_rong(ma):
+    """Ban lãnh đạo, công ty con, cổ tức, sự kiện, giao dịch nội bộ (mỗi mục lỗi riêng không ảnh hưởng mục khác)."""
+    out = {}
+    for k, ham in (("bld", CB.ban_lanh_dao), ("con", CB.cong_ty_con), ("cotuc", lambda m: CB.lich_su_co_tuc(m, 20)),
+                   ("sukien", lambda m: CB.su_kien(m, 30)), ("noibo", lambda m: CB.giao_dich_noi_bo(m, 30))):
+        try:
+            out[k] = ham(ma)
+        except Exception:
+            out[k] = pd.DataFrame()
+    return out
+
+
+@st.cache_data(ttl=15 * 60, show_spinner=False)
+def tin_ma(ma, ten):
+    ds = TT.tin_theo_ma(ma, ten)
+    try:
+        dn = CB.tin_doanh_nghiep(ma, 15)
+    except Exception:
+        dn = []
+    return ds, dn
+
+
+@st.cache_data(ttl=15 * 60, show_spinner=False)
+def tin_cho(nguon: tuple):
+    return TT.tin_thi_truong(list(nguon))
+
+
+MAU_TIN = {1: "#16a34a", -1: "#dc2626", 0: "#64748b"}
+
+
+def hien_tin(ds, so=30, key=""):
+    if not ds:
+        st.caption("Chưa có tin.")
+        return
+    for t in ds[:so]:
+        tg = t.thoi_gian.strftime("%d/%m %H:%M") if t.thoi_gian is not None else ""
+        nhan = f"<span style='color:{MAU_TIN[t.cam_xuc]};font-weight:600'>{t.nhan}</span>" if t.cam_xuc else ""
+        ma = " ".join(f"<code>{m}</code>" for m in t.ma[:4])
+        st.markdown(f"<div style='padding:6px 0;border-bottom:1px solid #e2e8f0'>"
+                    f"<a href='{html_esc(t.link)}' target='_blank'>{html_esc(t.tieu_de)}</a><br>"
+                    f"<span style='font-size:12px;color:#64748b'>{tg} · {html_esc(t.nguon)}</span> {nhan} {ma}</div>",
+                    unsafe_allow_html=True)
+
+
+def html_esc(s):
+    import html
+    return html.escape(str(s or ""), quote=True)
+
+
+def muc_tin_tuc(ma, ten):
+    with st.spinner("Đang tìm tin…"):
+        ds, dn = tin_ma(ma, ten)
+    st.caption("Tin từ nhiều báo (Google News). Nhãn Tích cực/Tiêu cực tự động theo từ khóa – chỉ để tham khảo.")
+    dem = {k: sum(t.cam_xuc == k for t in ds) for k in (1, -1)}
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Tin gần đây", len(ds))
+    c2.metric("Tích cực", dem[1])
+    c3.metric("Tiêu cực", dem[-1])
+    hien_tin(ds, 25)
+    if dn:
+        st.markdown("##### Tin & công bố của doanh nghiệp")
+        for x in dn:
+            st.markdown(f"- **{x['ngay']}** · {html_esc(x['tieu_de'])}" + (f" ([nguồn]({x['link']}))" if x["link"] else ""))
 
 
 def muc_tai_chinh(ma):
@@ -344,8 +422,8 @@ with st.expander("⚙ Cài đặt chung", expanded=False):
                           step=10_000_000, format="%d")
 tam = TAM[tam_nhan]
 
-tab0, tab_loc, tab1, tab2, tab3 = st.tabs(["🏆 Khuyến nghị", "🔎 Bộ lọc", "🔍 Tra cứu", "💼 Danh mục",
-                                           "📋 Theo dõi"])
+tab0, tab_loc, tab1, tab_tin, tab2, tab3 = st.tabs(["🏆 Khuyến nghị", "🔎 Bộ lọc", "🔍 Tra cứu", "📰 Tin thị trường",
+                                                    "💼 Danh mục", "📋 Theo dõi"])
 mac_dinh = du_lieu.doc_danh_sach(HERE / "ma.txt")
 
 with tab0:
@@ -462,9 +540,16 @@ with tab1:
             st.caption("Chỉ số không mua/bán trực tiếp được – chỉ xem xu hướng và tín hiệu đỉnh.")
             the_tin_hieu_dinh(K.tin_hieu_dinh(kq, tam))
         elif kq.khung and kq.loai == "vn" and tam in kq.frames:
-            t_kt, t_dn, t_tc, t_cs = st.tabs(["📈 Kỹ thuật", "🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số"])
+            t_kt, t_dn, t_tc, t_cs, t_tin = st.tabs(["📈 Kỹ thuật", "🏢 Doanh nghiệp", "📊 Tài chính", "🧮 Chỉ số",
+                                                    "📰 Tin tức"])
             with t_dn:
                 muc_doanh_nghiep(kq.ma)
+            with t_tin:
+                try:
+                    ten = (cb_ho_so(kq.ma)[0] or {}).get("ten_ngan")
+                except Exception:
+                    ten = None
+                muc_tin_tuc(kq.ma, ten)
             with t_tc:
                 muc_tai_chinh(kq.ma)
             with t_cs:
@@ -527,6 +612,23 @@ with tab_loc:
         st.download_button("⬇ Tải kết quả lọc (CSV)", b[cot].to_csv(index=False).encode("utf-8-sig"),
                            file_name="bo_loc.csv", mime="text/csv", width="stretch")
 
+with tab_tin:
+    c1, c2 = st.columns(2)
+    nguon = c1.multiselect("Nguồn", list(TT.RSS), default=list(TT.RSS), key="tin_nguon")
+    danh_gia = c2.multiselect("Đánh giá", ["Tích cực", "Tiêu cực", "Trung tính"],
+                              default=["Tích cực", "Tiêu cực", "Trung tính"], key="tin_dg")
+    tu_khoa = st.text_input("Tìm theo từ khóa hoặc mã (VD: HPG, lãi suất, ngân hàng)", key="tin_tk")
+    chi_co_ma = st.checkbox("Chỉ tin có nhắc tới mã cổ phiếu", key="tin_ma")
+    if st.button("🔄 Làm mới tin", key="tin_lm"):
+        tin_cho.clear()
+    with st.spinner("Đang tải tin…"):
+        ds_tin = tin_cho(tuple(nguon))
+    tk = tu_khoa.strip()
+    loc = [t for t in ds_tin if t.nhan in danh_gia and (not chi_co_ma or t.ma)
+           and (not tk or tk.lower() in t.tieu_de.lower() or tk.upper() in t.ma)]
+    st.caption(f"{len(loc)}/{len(ds_tin)} tin · tự làm mới mỗi 15 phút · nhãn đánh giá tự động theo từ khóa")
+    hien_tin(loc, 80)
+
 with tab2:
     st.caption("Nhập các mã đang nắm giữ. Khi chạy trên máy tính, danh mục được lưu vào danh_muc.csv; "
                "trên web hãy tải file về để lưu.")
@@ -576,6 +678,20 @@ with tab2:
              "%": "{:+.1f}%", "Cắt lỗ động": "{:,.0f}", "Chốt lời": "{:,.0f}", "Giá bán đề xuất": "{:,.0f}",
              "Lãi nếu bán": "{:,.0f}"}, na_rep="–"),
             hide_index=True, width="stretch")
+        st.markdown("##### Tin mới của các mã đang giữ")
+        tin_dm = []
+        for r in rows:
+            if r["Mã"] in du_lieu.CHI_SO_VN or du_lieu.phan_loai(r["Mã"])[0] != "vn":
+                continue
+            try:
+                tin_dm += [t for t in tin_ma(r["Mã"], None)[0][:5]]
+            except Exception:
+                pass
+        tin_dm.sort(key=lambda t: t.thoi_gian or pd.Timestamp(0, tz="Asia/Ho_Chi_Minh"), reverse=True)
+        xau = [t for t in tin_dm if t.cam_xuc < 0]
+        if xau:
+            st.warning(f"⚠ {len(xau)} tin tiêu cực gần đây liên quan đến mã đang giữ – xem bên dưới.")
+        hien_tin(tin_dm, 20)
 
 with tab3:
     ds_txt = st.text_area("Danh sách mã (cách nhau bởi dấu cách hoặc xuống dòng)",

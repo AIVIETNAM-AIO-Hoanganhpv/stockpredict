@@ -43,17 +43,19 @@ _bo_nho: dict = {}
 
 # ------------------------------------------------------------------------- tải & cache
 def _goi(duong_dan: str):
+    """Gọi API Vietcap (đường dẫn tương đối) hoặc một URL đầy đủ (VD: CafeF)."""
     import gzip
     import urllib.request
-    req = urllib.request.Request(URL + duong_dan, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+    url = duong_dan if duong_dan.startswith("http") else URL + duong_dan
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
         raw = r.read()
     if raw[:2] == b"\x1f\x8b":
         raw = gzip.decompress(raw)
     d = json.loads(raw)
-    if not d.get("successful", True):
-        raise RuntimeError(d.get("msg") or "Vietcap báo lỗi")
-    return d.get("data")
+    if not d.get("successful", d.get("Success", True)):
+        raise RuntimeError(d.get("msg") or d.get("Message") or "Nguồn dữ liệu báo lỗi")
+    return d.get("data", d.get("Data"))
 
 
 def _lay(ma: str, loai: str, duong_dan: str):
@@ -143,6 +145,121 @@ def co_dong(ma: str, so: int = 10) -> pd.DataFrame:
              "Cập nhật": (x.get("publicDate") or "")[:10]} for x in co_dong_raw(ma)]
     df = pd.DataFrame(rows)
     return df.sort_values("Tỷ lệ %", ascending=False).head(so).reset_index(drop=True) if not df.empty else df
+
+
+# ------------------------------------------------------------------------- sự kiện, cổ tức, nội bộ, công ty con
+CAFEF = "https://cafef.vn/du-lieu/Ajax/PageNew/"
+LOAI_SU_KIEN = {"DIV": "Cổ tức tiền mặt", "ISS": "Phát hành cổ phiếu", "AGME": "Đại hội cổ đông thường niên",
+                "EGME": "Đại hội cổ đông bất thường", "AIS": "Niêm yết bổ sung", "DDIND": "Giao dịch nội bộ",
+                "DDINS": "Giao dịch cổ đông lớn", "DDRP": "Giao dịch người liên quan", "MOVE": "Chuyển sàn",
+                "NLIS": "Niêm yết mới", "SUSP": "Tạm ngừng giao dịch", "OTHE": "Khác"}
+
+
+def su_kien_raw(ma):
+    den = pd.Timestamp.now() + pd.Timedelta(days=180)
+    return _lay(ma, "sukien", f"events?ticker={ma}&fromDate=20100101&toDate={den:%Y%m%d}&page=0&size=200") or {}
+
+
+def tin_dn_raw(ma):
+    den = pd.Timestamp.now() + pd.Timedelta(days=1)
+    return _lay(ma, "tin", f"news?ticker={ma}&fromDate=20200101&toDate={den:%Y%m%d}&page=0&size=30") or {}
+
+
+def noi_bo_raw(ma):
+    return _lay(ma, "noibo", f"company/{ma}/insider-transaction") or {}
+
+
+def cong_ty_con_raw(ma):
+    return _lay(ma, "ctycon", f"{CAFEF}GetDataSubsidiaries.ashx?Symbol={ma.lower()}") or {}
+
+
+def _ds(raw):
+    return raw.get("content", []) if isinstance(raw, dict) else (raw or [])
+
+
+def su_kien(ma: str, so: int = 30, loai: tuple | None = None) -> pd.DataFrame:
+    """Sự kiện doanh nghiệp (mới nhất trước): cổ tức, phát hành, ĐHCĐ, niêm yết bổ sung…"""
+    rows = []
+    gioi_han = f"{pd.Timestamp.now() + pd.Timedelta(days=366):%Y-%m-%d}"     # bỏ ngày sai của nguồn (VD: 2031)
+    for x in _ds(su_kien_raw(ma)):
+        if loai and x.get("eventCode") not in loai:
+            continue
+        if (x.get("displayDate1") or "")[:10] > gioi_han:
+            continue
+        rows.append({"Ngày": (x.get("displayDate1") or x.get("publicDate") or "")[:10],
+                     "Loại": LOAI_SU_KIEN.get(x.get("eventCode"), x.get("eventNameVi") or x.get("eventCode")),
+                     "Nội dung": x.get("eventTitleVi") or x.get("eventNameVi") or ""})
+    df = pd.DataFrame(rows)
+    return df.sort_values("Ngày", ascending=False).head(so).reset_index(drop=True) if not df.empty else df
+
+
+def lich_su_co_tuc(ma: str, so: int = 20) -> pd.DataFrame:
+    """Lịch sử trả cổ tức: ngày GDKHQ, năm tài chính, tỷ lệ (% mệnh giá 10.000đ), tiền mặt / cổ phiếu."""
+    rows = []
+    for x in _ds(su_kien_raw(ma)):
+        code, title = x.get("eventCode"), x.get("eventTitleVi") or ""
+        if code == "DIV":
+            loai = "Tiền mặt"
+            ty_le = (x.get("valuePerShare") or 0) / 10_000 * 100 or (x.get("exerciseRatio") or 0) * 100
+        elif code == "ISS" and ("thưởng" in title.lower() or "cổ tức" in title.lower()):
+            loai, ty_le = "Cổ phiếu", (x.get("exerciseRatio") or 0) * 100
+        else:
+            continue
+        nam = re.search(r"(?:Đợt\s*\d+\s*)?(20\d\d)", title)
+        rows.append({"Ngày GDKHQ": (x.get("displayDate1") or "")[:10], "Năm": nam.group(1) if nam else "",
+                     "Cổ tức %": round(ty_le, 2), "Loại": loai,
+                     "Tiền/CP (đ)": x.get("valuePerShare") if code == "DIV" else None, "Nội dung": title})
+    df = pd.DataFrame(rows)
+    return df.sort_values("Ngày GDKHQ", ascending=False).head(so).reset_index(drop=True) if not df.empty else df
+
+
+def giao_dich_noi_bo(ma: str, so: int = 20) -> pd.DataFrame:
+    rows = []
+    for x in _ds(noi_bo_raw(ma)):
+        rows.append({"Ngày": (x.get("startDate") or x.get("displayDate1") or "")[:10],
+                     "Người giao dịch": x.get("traderNameVi") or "",
+                     "Chức vụ": x.get("traderPositionVi") or x.get("roleNameVi") or "",
+                     "Loại": x.get("actionTypeVi") or "", "Đăng ký": x.get("shareRegister"),
+                     "Thực hiện": x.get("shareAcquire"), "Sở hữu sau GD": x.get("shareAfterTrade"),
+                     "Trạng thái": x.get("tradeStatusVi") or "",
+                     "Người liên quan": x.get("relativeNameVi") if x.get("relativeNameVi") != x.get("traderNameVi") else ""})
+    df = pd.DataFrame(rows)
+    return df.sort_values("Ngày", ascending=False).head(so).reset_index(drop=True) if not df.empty else df
+
+
+def ban_lanh_dao(ma: str) -> pd.DataFrame:
+    """HĐQT, Ban giám đốc… (theo danh sách cổ đông có chức vụ)."""
+    rows = [{"Họ tên": x.get("ownerName"), "Chức vụ": x.get("positionName"),
+             "Số CP": x.get("quantity"), "Tỷ lệ %": round((x.get("percentage") or 0) * 100, 3)}
+            for x in co_dong_raw(ma) if x.get("positionName")]
+    return pd.DataFrame(rows)
+
+
+def cong_ty_con(ma: str) -> pd.DataFrame:
+    """Công ty con & liên kết (nguồn CafeF): tên, vốn điều lệ, tỷ lệ sở hữu."""
+    raw = cong_ty_con_raw(ma)
+    ds = raw.get("Subsidiaries", []) if isinstance(raw, dict) else []
+    rows = []
+    for x in ds:
+        tl = x.get("OwnershipRate")
+        rows.append({"Công ty": x.get("Name"), "Vốn điều lệ (tỷ)": x.get("TotalCapital"),
+                     "Vốn góp (tỷ)": x.get("SharedCapital"),
+                     "Sở hữu %": round(tl, 2) if tl is not None and tl <= 100 else None,
+                     "Loại": "Công ty con" if tl is not None and 50 < tl <= 100 else "Liên kết",
+                     "Ghi chú": x.get("Note") or ""})
+    df = pd.DataFrame(rows)
+    return df.sort_values("Sở hữu %", ascending=False, na_position="last").reset_index(drop=True) if not df.empty else df
+
+
+def tin_doanh_nghiep(ma: str, so: int = 20) -> list[dict]:
+    """Tin của doanh nghiệp (Vietcap): tiêu đề, ngày, tóm tắt."""
+    out = []
+    for x in _ds(tin_dn_raw(ma))[:so]:
+        tom_tat = _lam_sach(x.get("newsShortContent") or x.get("newsFullContent") or "")[:400]
+        out.append({"tieu_de": x.get("newsTitle") or "", "ngay": (x.get("publicDate") or "")[:16].replace("T", " "),
+                    "nguon": x.get("newsSource") or "Vietcap", "link": x.get("newsSourceLink") or "",
+                    "tom_tat": tom_tat})
+    return out
 
 
 # ------------------------------------------------------------------------- báo cáo tài chính
@@ -432,7 +549,13 @@ def xuat_excel(ma: str, duong_dan) -> Path:
             b = bang_chi_so(ma, quy)
             if not b.empty:
                 b.to_excel(w, sheet_name=f"Chỉ số ({'quý' if quy else 'năm'})", index=False)
-        cd = co_dong(ma, 30)
-        if not cd.empty:
-            cd.to_excel(w, sheet_name="Cổ đông lớn", index=False)
+        for ten, ham in (("Cổ đông lớn", lambda: co_dong(ma, 30)), ("Ban lãnh đạo", lambda: ban_lanh_dao(ma)),
+                         ("Công ty con & liên kết", lambda: cong_ty_con(ma)), ("Lịch sử cổ tức", lambda: lich_su_co_tuc(ma, 50)),
+                         ("Sự kiện", lambda: su_kien(ma, 100)), ("Giao dịch nội bộ", lambda: giao_dich_noi_bo(ma, 100))):
+            try:
+                b = ham()
+            except Exception:
+                continue
+            if not b.empty:
+                b.to_excel(w, sheet_name=ten[:31], index=False)
     return duong_dan

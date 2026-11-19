@@ -77,3 +77,34 @@ def test_cli_doanh_nghiep(tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == 0 and "Sức khỏe tài chính" in out and "ZZZ" in out
     assert (tmp_path / "FPT_tai_chinh.xlsx").exists()
+
+
+def test_co_tuc_su_kien_noi_bo_cong_ty_con():
+    ct = C.lich_su_co_tuc("FPT")
+    tm = ct[ct["Loại"] == "Tiền mặt"]
+    assert not tm.empty and (tm["Cổ tức %"] == 10).all() and tm["Ngày GDKHQ"].is_monotonic_decreasing
+    assert (ct["Loại"] == "Cổ phiếu").any()                       # cổ phiếu thưởng
+    sk = C.su_kien("FPT", 100)
+    assert not sk.empty and (sk["Ngày"] <= f"{pd.Timestamp.now() + pd.Timedelta(days=366):%Y-%m-%d}").all()
+    nb = C.giao_dich_noi_bo("FPT")
+    assert {"Người giao dịch", "Chức vụ", "Loại"} <= set(nb.columns) and len(nb) > 0
+    con = C.cong_ty_con("FPT")
+    assert (con["Sở hữu %"].dropna() <= 100).all() and (con["Loại"] == "Công ty con").any()
+    bld = C.ban_lanh_dao("FPT")
+    assert bld["Chức vụ"].str.contains("Chủ tịch").any()
+    assert C.tin_doanh_nghiep("FPT", 5)
+
+
+def test_tin_tuc():
+    from dudoan import tin_tuc as T
+    ds = T.tin_thi_truong()
+    assert len(ds) >= 30 and len({t.nguon for t in ds}) == 3
+    tg = [t.thoi_gian for t in ds if t.thoi_gian is not None]
+    assert tg == sorted(tg, reverse=True)                           # mới → cũ
+    fpt = T.tin_theo_ma("FPT", "FPT Corp")
+    assert fpt and all("FPT" in t.ma for t in fpt)
+    assert T.cam_xuc("Công ty X báo lãi kỷ lục, vượt kế hoạch năm") == 1
+    assert T.cam_xuc("Cổ phiếu Y thủng đáy, khối ngoại bán ròng") == -1
+    assert T.cam_xuc("Công ty Z họp đại hội cổ đông") == 0
+    assert "HPG" in T.tim_ma("Hòa Phát lãi lớn quý 3") and "HPG" in T.tim_ma("Cổ phiếu HPG tăng")
+    assert T.tim_ma("CEO của USD và GDP") == []

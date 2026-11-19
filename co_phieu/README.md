@@ -103,9 +103,21 @@ py du_doan.py --doanh-nghiep FPT HPG     # hồ sơ, sức khỏe tài chính, x
   Điểm chỉ dùng các báo cáo **đã công bố** tính đến thời điểm chấm (theo ngày công bố), nên dùng được cho backtest.
 - **Ảnh hưởng tới khuyến nghị mua**: sức khỏe từ 4 trở lên được +10 điểm; từ 2 trở xuống bị −10 điểm;
   doanh nghiệp đang lỗ bị −15 điểm. Hai trường hợp sau không được xếp "Mua mạnh".
+- **Hồ sơ mở rộng**: ban lãnh đạo, công ty con & liên kết (nguồn CafeF), lịch sử trả cổ tức (tiền mặt / cổ phiếu),
+  sự kiện (ĐHCĐ, phát hành, niêm yết bổ sung), giao dịch nội bộ. **Công ty kiểm toán**: chưa có nguồn lấy tự động
+  (TCBS chặn truy cập tự động).
 - **Web app**:
-  - Tab Tra cứu có 4 mục: Kỹ thuật / Doanh nghiệp / Tài chính / Chỉ số, kèm nút tải Excel.
+  - Tab Tra cứu có 5 mục: Kỹ thuật / Doanh nghiệp / Tài chính / Chỉ số / **Tin tức**, kèm nút tải Excel.
   - Tab **Bộ lọc** lọc theo P/E, ROE, tăng trưởng lợi nhuận, nợ, sức khỏe, CTCK, cùng khuyến nghị kỹ thuật.
+
+## Tin tức
+- **Tin theo mã**: lấy từ Google News, tổng hợp nhiều báo, kèm tin và công bố của doanh nghiệp (nguồn Vietcap).
+- **Tab "Tin thị trường"**: tin mới nhất từ CafeF, Vietstock, VnExpress Kinh doanh, tự làm mới mỗi 15 phút.
+  Lọc được theo nguồn, đánh giá và từ khóa/mã.
+- **Tự gắn mã** khi tiêu đề nhắc tới mã (HPG) hoặc tên công ty (Hòa Phát, Techcombank…).
+- **Nhãn Tích cực / Tiêu cực**: gắn theo từ khóa, ví dụ "lãi kỷ lục", "trúng thầu" / "thua lỗ", "bị phạt", "thủng đáy".
+  Đây chỉ là gợi ý, có thể sai.
+- **Tab Danh mục**: hiện tin mới của các mã đang giữ và cảnh báo khi có tin tiêu cực.
 
 ## Kết quả kiểm định trên dữ liệu quá khứ (19/11/2026)
 Lệnh chạy: `py du_doan.py --kiem-dinh` (10–20 phút). Kết quả đầy đủ ở `bao_cao/kiem_dinh.md`.
@@ -179,7 +191,8 @@ dudoan/du_lieu.py    tải dữ liệu (Yahoo, vnstock, CSV/Excel)
 dudoan/bao_cao.py    báo cáo HTML + biểu đồ, Markdown, Excel
 dudoan/khuyen_nghi.py vùng mua đẹp, khuyến nghị, tính lãi/lỗ, đánh giá danh mục
 dudoan/quet.py       quét toàn thị trường VN, xếp hạng
-dudoan/co_ban.py     hồ sơ doanh nghiệp, BCTC, chỉ số, sức khỏe tài chính
+dudoan/co_ban.py     hồ sơ doanh nghiệp, BCTC, chỉ số, sức khỏe tài chính, cổ tức, sự kiện, nội bộ, công ty con
+dudoan/tin_tuc.py    tin tức (Google News, CafeF, Vietstock, VnExpress), gắn mã, nhãn tích cực/tiêu cực
 dudoan/kiem_dinh.py  backtest tín hiệu
 du_lieu_ma/ma_vn.csv danh sách mã HOSE/HNX/UPCoM (tự cập nhật)
 tests/               kiểm tra bằng dữ liệu giả lập
