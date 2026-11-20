@@ -47,12 +47,16 @@
   const sp = {
     label: 'StockPredict (giá VN)',
     short: 'SP',
-    tfs: ['1D', '1W', '1M'],
+    tfs: ['1h', '4h', '1D', '1W', '1M'],
     canLoadMore: false,
     hint: 'Giá cổ phiếu VN do công cụ dự đoán lấy hộ (Vietcap). VD: FPT, HPG, VCB, VNINDEX — giá theo đồng',
     normalize: s => s.toUpperCase().replace(/[^A-Z0-9]/g, ''),
     async fetchBars(sym, tf, beforeTime, fresh) {
       if (beforeTime) return [];
+      if (tf === '1h' || tf === '4h') {   // khung giờ: chỉ có khi được nhúng sẵn (bars_1h – trang xem trên điện thoại)
+        const g = SP.goi[sym]; if (!g || !g.bars_1h) throw new Error(`Chưa có dữ liệu khung giờ cho ${sym} – chỉ Coin/Forex nhúng sẵn mới có 1g/4g`);
+        const h = g.bars_1h.map(b => ({ ...b })); return tf === '4h' ? App.aggregate(h, 14400) : h;
+      }
       const d = (await daily(sym, fresh)).map(b => ({ ...b }));
       return tf === '1W' ? App.aggregate(d, 604800) : tf === '1M' ? App.aggregateMonth(d) : d;
     },
@@ -747,6 +751,7 @@
   DEFS.st_fx_ls = {
     id: 'st_fx_ls', name: 'Coin/Forex — Đồng pha + ADX, Long & Short', cat: 'strategy', overlay: true, plots: [], levels: [],
     inputs: [['huong', 'Hướng', 'Long và Short', 'sel', ['Long và Short', 'Chỉ Long', 'Chỉ Short']],
+      ['dp', 'Đồng pha', '3 khung', 'sel', ['3 khung', '2 khung (bỏ khung lớn nhất)']],
       ['adx', 'ADX khung lớn kế tiếp tối thiểu (0 = tắt)', 25, 'float'],
       ['loc', 'Lọc xu hướng chung', 'MA200 ngày của chính mã', 'sel', ['MA200 ngày của chính mã', 'Tắt']],
       ['rr', 'Chốt lời cố định (R, 0 = không)', 0, 'float'], ['rui', 'Rủi ro mỗi lệnh (% vốn)', 1, 'float'], ['phi', 'Phí + spread mỗi chiều (%)', 0.03, 'float']],
@@ -761,7 +766,8 @@
         const ban = suKien(D, lonQ[0], App.macdSto(lonQ[0].B).Ban);
         const cat = j => { let ok = false; for (let x = Math.max(1, j - 2); x <= j; x++) { let deu = true; for (let q = x; q <= j; q++) if (!(m5[q] > m10[q])) deu = false; if (deu && !(m5[x - 1] > m10[x - 1])) ok = true; }
           return ok && Q.c[j] > m5[j] && Q.c[j] > m10[j]; };
-        return { Q, vao: j => up[j] && upLon.every(u => u[j] === true) && Q.c[j] > Q.o[j] && (S.Mua1[j] || S.Mua2[j] || cat(j)), ban };
+        const dung = I.dp.startsWith('2') ? upLon.slice(0, 1) : upLon, tin = j => Q.c[j] > Q.o[j] && (S.Mua1[j] || S.Mua2[j] || cat(j));
+        return { Q, up, upLon: dung, tin, vao: j => up[j] && dung.every(u => u[j] === true) && tin(j), ban };
       };
       const L = ben(D), Sh = ben(Dn), atr = T.atr(D, 14);
       const dm = T.dmi(lon[0].B, 14, 14), adx = theoNen(D, lon[0], dm.adx), pdi = theoNen(D, lon[0], dm.plus), mdi = theoNen(D, lon[0], dm.minus);
@@ -804,8 +810,28 @@
       }
       if (pos) dong(n - 1, D.c[n - 1], 'Đang mở');
       const wins = trades.filter(t => t.pnl > 0), gp = wins.reduce((a, t) => a + t.pnl, 0), gl = -trades.filter(t => t.pnl <= 0).reduce((a, t) => a + t.pnl, 0);
+      // ---- DỰ BÁO HÔM NAY (nến cuối đã đóng) ----
+      const tenK = ['15p', '1g', '4g', 'Ngày', 'Tuần', 'Tháng'], kh = [tenK[k0]].concat(THANG_KHUNG.slice(k0 + 1, k0 + 3).map((_, q) => tenK[k0 + 1 + q])).slice(0, I.dp.startsWith('2') ? 2 : 3);
+      const z = n - 1, dau = v => v ? '✔' : '✖';
+      const dong1 = (s, B_) => { const tt = [B_.up[z]].concat(B_.upLon.map(u => u[z] === true));
+        return (s > 0 ? 'LONG ' : 'SHORT ') + tt.map((v, q) => kh[q] + dau(v)).join(' ') + ` · ADX${dau(adxOk(z, s))}` + (I.loc !== 'Tắt' ? ` · MA200${dau(chung(z, s))}` : '') + ` · Tín hiệu${dau(B_.tin(z))}`; };
+      let hn;
+      const moCuoi = trades.length && trades[trades.length - 1].why === 'Đang mở' ? trades[trades.length - 1] : null;
+      if (moCuoi) hn = { mau: moCuoi.side === 'Mua' ? '#2962ff' : '#e91e63', tieuDe: `ĐANG ${moCuoi.side === 'Mua' ? 'LONG' : 'SHORT'} từ ${App.fmtTime(D.t[moCuoi.ei])} giá ${App.fmtPrice(moCuoi.ep)} (${App.fmtPct(moCuoi.pct)})`, them: 'Giữ đến tín hiệu ngược khung lớn hoặc chạm cắt lỗ' };
+      else {
+        const vao = [[1, L], [-1, Sh]].map(([s, B_]) => { if (!(B_.vao(z) && adxOk(z, s) && chung(z, s))) return null;
+          let st = dinhDay(B_.Q, z); if (st == null) return null; st = s > 0 ? Math.max(st, D.c[z] - 3 * atr[z]) : Math.min(-st, D.c[z] + 3 * atr[z]); return { s, st }; }).find(Boolean);
+        hn = vao ? { mau: vao.s > 0 ? '#089981' : '#f23645', tieuDe: `VÀO ${vao.s > 0 ? 'LONG' : 'SHORT'} phiên tới ~${App.fmtPrice(D.c[z])}`, them: `Cắt lỗ ${App.fmtPrice(vao.st)} (${App.fmtPct((vao.st / D.c[z] - 1) * 100)})` }
+          : { mau: '#787b86', tieuDe: 'ĐỨNG NGOÀI', them: 'Chưa đủ điều kiện – cần mọi ô ✔ ở dòng Long hoặc Short' };
+      }
+      hn.dong = [dong1(1, L), dong1(-1, Sh)];
+      const veHomNay = (g, X) => { const w = Math.min(X.W - 20, 430), x0 = 10, y0 = X.H - 96;
+        g.fillStyle = 'rgba(19,23,34,0.88)'; g.fillRect(x0, y0, w, 86); g.fillStyle = hn.mau; g.fillRect(x0, y0, 4, 86);
+        g.textAlign = 'left'; g.textBaseline = 'top'; g.font = 'bold 12px sans-serif'; g.fillStyle = hn.mau; g.fillText('HÔM NAY: ' + hn.tieuDe, x0 + 10, y0 + 6);
+        g.font = '11px sans-serif'; g.fillStyle = '#d1d4dc'; g.fillText(hn.them, x0 + 10, y0 + 24);
+        hn.dong.forEach((t, q) => g.fillText(t, x0 + 10, y0 + 44 + q * 18)); };
       const ten = THANG_KHUNG.slice(k0 + 1, k0 + 3).map(b => ({ 3600: '1H', 14400: '4H', 86400: 'D', 604800: 'W', M: 'M' })[b]).join(' + ');
-      return { markers: mk, backtest: { trades, equity, net: cash - cap0, netPct: (cash / cap0 - 1) * 100, n: trades.length, winRate: trades.length ? wins.length / trades.length * 100 : 0,
+      return { homNay: hn, draw: veHomNay, markers: mk, backtest: { trades, equity, net: cash - cap0, netPct: (cash / cap0 - 1) * 100, n: trades.length, winRate: trades.length ? wins.length / trades.length * 100 : 0,
         pf: gl ? gp / gl : gp ? Infinity : 0, mdd, avg: trades.length ? (cash - cap0) / trades.length : 0, buyHold: (D.c[n - 1] / D.c[0] - 1) * 100,
         note: `Long khi khung đang xem + ${ten} cùng TĂNG (≥ 2/3: đỉnh/đáy cao dần, MACD > tín hiệu, Sto 13-13-5 %K > %D), ADX khung ${ten.split(' ')[0]} ≥ ${I.adx} với DI+ > DI−, nến tăng + MACD+Sto Mua1/Mua2 hoặc MA5 cắt lên MA10. Short = đối xứng tuyệt đối. Cắt lỗ đỉnh/đáy gần nhất (tối đa 3 ATR), rủi ro ${I.rui}% vốn/lệnh; thoát khi khung ${ten.split(' ')[0]} có tín hiệu MACD+Sto ngược chiều${I.loc !== 'Tắt' ? ' hoặc giá cắt MA200 ngày ngược hướng' : ''}. Kiểm định (forex, vàng, coin; lọc BTC/DXY; mọi khung): KHÔNG có lợi thế – forex lỗ mọi khung từ 1H, coin ngày +3,9%/năm nhưng ngang vào ngẫu nhiên và thua giữ BTC; chi tiết co_phieu/nghien_cuu/ket_qua_fx_long_short.md.` } };
     }
