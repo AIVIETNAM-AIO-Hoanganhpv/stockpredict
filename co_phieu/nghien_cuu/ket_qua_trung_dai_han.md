@@ -269,3 +269,48 @@ Rules:
 - Because older delisted stocks (often the ones that fell and never recovered) are missing, **"never sell at a loss" is flattered here**. In reality some stuck positions would have gone to zero.
 
 Excel: new sheets `v5 chi ban khi lai - tong hop`, `v5 danh sach lenh`, `v5 theo nam`, `v5 tung ma`.
+
+---
+
+## Sto ngắn + dài (added 2026-11-20, user's question). Code: `dh.py` (`tf_up`, `prepare(sto="S")`, `masks(trig="ms")`), `persym_s.py`, `s_runs.py`, `s_report.py`; table in `tables_sto.md`
+Variants:
+- **S1:** on every timeframe (D/W/M) the Sto vote of the đồng pha UP test needs BOTH Sto 8-5-3 %K > %D AND Sto 13-13-5 %K > %D.
+  It is still ≥ 2 of 3 with the structure and MACD votes.
+- **S2:** S1 plus a daily entry only on MACD+Sto Mua1/Mua2 (no 2MA cross). The confirmation order uses XN1–3 only.
+- The MACD+Sto signals themselves (Mua1/Mua2/XN, monthly sell) already used both Stos, as `App.macdSto` does.
+- Variant (c) of v4/v5 has no daily trigger, so S2 is not applicable there. S2 was run on variant (a) instead.
+- These variants are not in the GreenView JS, so there was no JS cross-check for S1/S2. The baselines still match the JS.
+
+**Verdict: using both Stos makes things worse or changes nothing.**
+- It cuts the number of trades by 40–75 %.
+- In TEST and FULL, every S row is below its baseline except v3 10 years S2 (+0.9 % vs −0.1 % in TEST, on 14 trades) and v5 (a) S2 on FULL only.
+- Every S row is far below the plain phase filter (TEST +10.6 %, FULL +11.1 %).
+
+| strategy | TRAIN | TEST | FULL | FULL max DD | TEST trades | random ≥ real (TEST / FULL) |
+|---|---|---|---|---|---|---|
+| v3 9 m baseline | −0.6 % | −1.3 % | −0.3 % | −48 % | 57 | 43 % / 30 % |
+| v3 9 m S1 | −0.7 % | −1.8 % | −1.2 % | −46 % | 36 | 55 % / 62 % |
+| v3 9 m S2 | −0.4 % | −0.2 % | −0.3 % | −16 % | 14 | 87 % / 97 % |
+| v3 10 y baseline | −0.6 % | −0.1 % | 0.0 % | −54 % | 46 | 33 % / 28 % |
+| v3 10 y S1 | −0.7 % | −3.3 % | −2.0 % | −61 % | 36 | 71 % / 77 % |
+| v3 10 y S2 | −0.4 % | +0.9 % | +0.3 % | −15 % | 14 | 59 % / 68 % |
+| v4 (c) N10 baseline | +2.6 % | +11.2 % | +6.7 % | −40 % | 1,201 | 7.5 % / 9.5 % |
+| v4 (c) N10 S1 | +1.4 % | +10.2 % | +5.6 % | −35 % | 1,097 | 3 % / 3 % |
+| v4 (a) N10 baseline | −1.7 % | +5.2 % | +1.6 % | −31 % | 651 | 83 % / 87 % |
+| v4 (a) N10 S2 | −0.8 % | +1.0 % | +0.1 % | −35 % | 311 | 1 % / 1.5 % |
+| v5 (c) baseline | +1.9 % | +5.8 % | +2.9 % | −37 % | 183 | 48 % / 71 % |
+| v5 (c) S1 | 0.0 % | −0.2 % | +0.9 % | −55 % | 133 | 99 % / 88 % |
+| v5 (a) baseline | −0.7 % | +4.2 % | +0.3 % | −53 % | 139 | 1.5 % / 63 % |
+| v5 (a) S2 | −0.8 % | +3.4 % | +1.6 % | −29 % | 144 | 34 % / 53 % |
+
+Notes:
+- **Random column for v3:** random entries on the same eligible days, 200 runs.
+- **Random column for v4/v5:** random picks from the same candidate pool, 200 runs.
+- **A low "% random ≥ real" for v4 (c) S1 and v4 (a) S2** means the ranking beats random picks within that smaller pool. But the pool itself is worse: the absolute returns are below the baseline and the phase filter.
+- **Per symbol, v3 TEST (100 % of capital in one stock):**
+  - Average trade: baseline +3.4 % (9 months) / +3.3 % (10 years); S1 −2.2 % / −2.7 %; S2 −3.3 % / +0.1 %.
+  - Win rate falls from 31 % to 14–27 %.
+  - Share of symbols beating their own buy & hold stays at 32 %.
+  - Random entries do as well or better for every S row (58–87 % of runs ≥ real).
+
+Excel: new sheet `Sto ngan + dai`.

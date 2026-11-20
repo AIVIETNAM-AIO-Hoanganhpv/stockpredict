@@ -143,3 +143,33 @@ Code `variants.py`, `varreport.py`; full table (TEST + FULL, every TF × class �
 * **MA200 chính mã vs BTC/DXY regime:** no systematic difference. On D crypto/forex it hardly differs from regime off, because
   đồng pha D/W/M up almost always means price is above its MA200 anyway.
 * The verdict above stands: none of these variants should be traded with real money on this evidence.
+
+## Added 2026-11-20: "Sto ngắn + dài" (short Sto 8-5-3 and long Sto 13-13-5, as in the course slides)
+
+Code `sto2.py`, `sto2report.py`. Full table (TEST + FULL, both configs, baseline / S1 / S2 side by side): `tables_sto2.md`; Excel sheet `Sto_ngan_dai`.
+- **S1**: on every timeframe, UP's Sto condition = short Sto %K > %D **and** long Sto %K > %D (DOWN: both %K < %D). UP/DOWN still needs ≥ 2 of 3
+  together with structure and MACD.
+- **S2**: S1, and the only entry trigger is MACD+Sto Mua1/Mua2 (mirrored for shorts). The MA5/10 cross is no longer used.
+- Applied to the headline (3 khung, BTC/DXY regime) and to "2 khung + MA200 chính mã". ADX ≥ 25, no TP. Same split, costs and sizing; 200 random runs.
+  15m excluded (too short).
+
+**Result: the stricter Sto test does not help. It only removes trades.**
+* Trades (sum over all TEST cells): headline 292 → S1 241 → S2 124; 2 khung + MA200 own 413 → 363 → 186. The share of shorts stays about 50–55 %.
+  S2 roughly halves the trade count: D forex goes to about 1 trade/yr for 7 pairs, W to 0.2–0.3/yr.
+* **TEST, cells with enough trades:**
+
+  | Cell | Baseline | S1 | S2 |
+  |---|---|---|---|
+  | 1H forex, headline | −4.7 % | −8.2 % | −14.4 % (2nd percentile vs random) |
+  | 1H forex, 2 khung + MA200 own | +18.7 % | +8.0 % | −13.1 % (0th percentile) |
+  | 1H crypto, headline | +1.2 % | +6.0 % (still 0th percentile) | −5.6 % |
+  | 4H forex | −13 to −20 % | −13 to −20 % | −3 % to −4 % (only 10–16 trades) |
+  | D crypto | +13 % to +19 % | +13 % to +19 % | +13 % to +19 % (+0.5…+1.6 R on 10–39 trades) |
+
+  D crypto is about the same as random everywhere (39–76th percentile) and far below BTC buy & hold (+27.5 %/yr).
+* **FULL period:**
+  - 1H forex 2 khung + MA200 own: baseline −5.7 %, S1 −33 %, S2 −32 %.
+  - 4H crypto 2 khung + MA200 own: baseline +37 %, S1 +31 %, S2 +6 %.
+  - D crypto S2: +44 % over 8.8 years (+4.2 %/yr, 92nd percentile), but on only 16 trades.
+* Random percentiles of 95–100 % appear only where S2 leaves 4–7 trades (W crypto, W gold FULL) with results of +0.1…+0.7 %/yr. These are not evidence.
+* **Verdict unchanged:** adding the short Sto (S1) or using only the MACD+Sto triggers (S2) does not create an edge. On 1H/4H forex it is worse.
