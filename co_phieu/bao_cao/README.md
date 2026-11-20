@@ -1,4 +1,4 @@
-# Dự đoán xu hướng – 20/11/2026 16:57 (GMT+7)
+# Dự đoán xu hướng – 21/11/2026 00:51 (GMT+7)
 
 | Mã | Dự đoán | Điểm | Các khung | Giá | Cắt lỗ | Chốt lời |
 |---|---|---:|---|---:|---:|---:|
@@ -7,10 +7,10 @@
 | [HPG](HPG.html) | ▼ Giảm | -27 | M▼ W▼ D■ | 20,450 | – | – |
 | [VCB](VCB.html) | ▼ Giảm | -53 | M▼ W▼ D▼ | 50,200 | – | – |
 | [SSI](SSI.html) | ▼ Giảm | -21 | M▼ W■ D■ | 20,000 | – | – |
-| [EURUSD](EURUSD.html) | ▼ Giảm | -29 | M▼ W▼ D▼ 4H▼ 1H▲ 15m▼ | 1.09769 | 1.09989 | 1.0922 |
-| [GBPUSD](GBPUSD.html) | ▼ Giảm | -32 | M■ W▼ D▼ 4H▼ 1H▼ 15m▲ | 1.31048 | 1.32347 | 1.31732 |
-| [USDJPY](USDJPY.html) | ■ Đi ngang | -2 | M■ W▲ D▲ 4H■ 1H▼ 15m▼ | 158.76 | – | – |
-| [XAUUSD](XAUUSD.html) | ▼ Giảm | -36 | M▼ W▼ D▼ 4H▼ 1H▼ 15m■ | 3,574 | 3,907 | 3,506 |
-| [AAPL](AAPL.html) | ▲ Tăng | +34 | M▲ W▲ D■ | 349.21 | 344.14 | 403.91 |
+| [EURUSD](EURUSD.html) | ▼ Giảm | -31 | M▼ W▼ D▼ 4H▼ 1H▲ 15m▼ | 1.09757 | 1.10089 | 1.09468 |
+| [GBPUSD](GBPUSD.html) | ▼ Giảm | -23 | M■ W▼ D▼ 4H▼ 1H■ 15m■ | 1.30996 | 1.31353 | 1.3011 |
+| [USDJPY](USDJPY.html) | ■ Đi ngang | -1 | M■ W■ D▲ 4H▼ 1H▼ 15m■ | 158.74 | – | – |
+| [XAUUSD](XAUUSD.html) | ▼ Giảm | -46 | M■ W▼ D▼ 4H▼ 1H▼ 15m▼ | 3,526 | 3,610 | 2,983 |
+| [AAPL](AAPL.html) | ▲ Tăng | +33 | M▲ W▲ D■ | 345.62 | 342.53 | 390.05 |
 
 > Công cụ chỉ hỗ trợ phân tích kỹ thuật, không phải lời khuyên đầu tư. Không có phương pháp nào dự đoán đúng 100%.
