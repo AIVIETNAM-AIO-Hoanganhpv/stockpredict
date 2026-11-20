@@ -195,6 +195,9 @@
       if (def.need) { App.toast(def.name + ': ' + def.need, 'err', 6000); return; }
       const uid = Date.now() + Math.floor(Math.random() * 1000);
       C.inds.push({ uid, id, I: I || {}, st: {} });
+      // chiến lược có danh sách chỉ báo đi kèm (def.kem = [[id, inputs], ...]) → thêm luôn để thấy các điều kiện vào lệnh
+      (def.kem || []).forEach(([id2, I2, st2], q) => { if (!App.INDICATORS[id2] || C.inds.some(x => x.id === id2 && JSON.stringify(x.I) === JSON.stringify(I2))) return;
+        C.inds.push({ uid: uid + 1 + q, id: id2, I: I2, st: st2 || {} }); });
       C.saveInds(); C.renderIndicators();
       App.toast('Đã thêm ' + def.name, 'ok');
       return uid;

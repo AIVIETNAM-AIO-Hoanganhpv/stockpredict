@@ -2921,6 +2921,7 @@ window.App = window.App || {};
   // cắt lỗ ở đáy sóng TUẦN gần nhất.
   DEFS.st_daihan = {
     id: 'st_daihan', name: 'Khoá học — Cổ phiếu trung/dài hạn: đồng pha, ADX tuần, giữ đến tín hiệu bán tháng', cat: 'strategy', overlay: true, plots: [], levels: [],
+    kem: [['ma', { len: 6 }, { m: { c: '#f7c948' } }], ['ma', { len: 10 }, { m: { c: '#2962ff' } }], ['ma', { len: 20 }, { m: { c: '#e91e63' } }], ['sp_dong_pha', {}], ['macd', {}], ['stoch', { k: 8, sk: 5, d: 3 }], ['stoch', { k: 13, sk: 13, d: 5 }], ['dmi', {}]],
     inputs: [['banLai', 'Chỉ bán khi có lãi (không cắt lỗ, giữ tối đa 10 năm)', true, 'bool'],
       ['giu', 'Thời gian giữ', 'Trung hạn (tối đa 9 tháng)', 'sel', ['Trung hạn (tối đa 9 tháng)', 'Dài hạn (tối đa 10 năm)']],
       ['lai', 'Lãi dự kiến Fibo tối thiểu (%, 0 = bỏ)', 0, 'float'], ['catMax', 'Cắt lỗ tối đa (%)', 15, 'float'],
@@ -3007,6 +3008,7 @@ window.App = window.App || {};
 
   DEFS.st_fx_ls = {
     id: 'st_fx_ls', name: 'Coin/Forex — Đồng pha + ADX, Long & Short', cat: 'strategy', overlay: true, plots: [], levels: [],
+    kem: [['ma', { len: 5 }, { m: { c: '#f7c948' } }], ['ma', { len: 10 }, { m: { c: '#2962ff' } }], ['ma', { len: 200 }, { m: { c: '#ffffff', w: 2 } }], ['macd', {}], ['stoch', { k: 8, sk: 5, d: 3 }], ['stoch', { k: 13, sk: 13, d: 5 }], ['dmi', {}]],
     inputs: [['huong', 'Hướng', 'Long và Short', 'sel', ['Long và Short', 'Chỉ Long', 'Chỉ Short']],
       ['dp', 'Đồng pha', '3 khung', 'sel', ['3 khung', '2 khung (bỏ khung lớn nhất)']],
       ['adx', 'ADX khung lớn kế tiếp tối thiểu (0 = tắt)', 25, 'float'],
@@ -3079,14 +3081,17 @@ window.App = window.App || {};
         const vao = [[1, L], [-1, Sh]].map(([s, B_]) => { if (!(B_.vao(z) && adxOk(z, s) && chung(z, s))) return null;
           let st = dinhDay(B_.Q, z); if (st == null) return null; st = s > 0 ? Math.max(st, D.c[z] - 3 * atr[z]) : Math.min(-st, D.c[z] + 3 * atr[z]); return { s, st }; }).find(Boolean);
         hn = vao ? { mau: vao.s > 0 ? '#089981' : '#f23645', tieuDe: `VÀO ${vao.s > 0 ? 'LONG' : 'SHORT'} phiên tới ~${App.fmtPrice(D.c[z])}`, them: `Cắt lỗ ${App.fmtPrice(vao.st)} (${App.fmtPct((vao.st / D.c[z] - 1) * 100)})` }
-          : { mau: '#787b86', tieuDe: 'ĐỨNG NGOÀI', them: 'Chưa đủ điều kiện – cần mọi ô ✔ ở dòng Long hoặc Short' };
+          : { mau: '#787b86', tieuDe: 'ĐỨNG NGOÀI', them: 'Cần mọi ô ✔ ở dòng Long hoặc Short' };
       }
       hn.dong = [dong1(1, L), dong1(-1, Sh)];
-      const veHomNay = (g, X) => { const w = Math.min(X.W - 20, 430), x0 = 10, y0 = X.H - 96;
-        g.fillStyle = 'rgba(19,23,34,0.88)'; g.fillRect(x0, y0, w, 86); g.fillStyle = hn.mau; g.fillRect(x0, y0, 4, 86);
+      hn.gon = hn.dong.map(t => t.replace('LONG ', 'L: ').replace('SHORT ', 'S: ').replace(/ · /g, ' ').replace('Tín hiệu', 'TH').replace('MA200', 'MA').replace('Ngày', 'N').replace('Tuần', 'T').replace('Tháng', 'Th'));
+      const veHomNay = (g, X) => { const w = Math.min(X.W - 20, 430), x0 = 10, y0 = X.H - 100;
+        g.fillStyle = 'rgba(19,23,34,0.88)'; g.fillRect(x0, y0, w, 92); g.fillStyle = hn.mau; g.fillRect(x0, y0, 4, 92);
         g.textAlign = 'left'; g.textBaseline = 'top'; g.font = 'bold 12px sans-serif'; g.fillStyle = hn.mau; g.fillText('HÔM NAY: ' + hn.tieuDe, x0 + 10, y0 + 6);
         g.font = '11px sans-serif'; g.fillStyle = '#d1d4dc'; g.fillText(hn.them, x0 + 10, y0 + 24);
-        hn.dong.forEach((t, q) => g.fillText(t, x0 + 10, y0 + 44 + q * 18)); };
+        const hep = g.measureText(hn.dong[1]).width > w - 16; if (hep) { g.font = '10px sans-serif'; }
+        (hep ? hn.gon : hn.dong).forEach((t, q) => g.fillText(t, x0 + 10, y0 + 44 + q * 18));
+        if (hep) { g.fillStyle = '#787b86'; g.fillText('N/T/Th = ngày/tuần/tháng · MA = MA200 · TH = tín hiệu', x0 + 10, y0 + 76); } };
       const ten = THANG_KHUNG.slice(k0 + 1, k0 + 3).map(b => ({ 3600: '1H', 14400: '4H', 86400: 'D', 604800: 'W', M: 'M' })[b]).join(' + ');
       return { homNay: hn, draw: veHomNay, markers: mk, backtest: { trades, equity, net: cash - cap0, netPct: (cash / cap0 - 1) * 100, n: trades.length, winRate: trades.length ? wins.length / trades.length * 100 : 0,
         pf: gl ? gp / gl : gp ? Infinity : 0, mdd, avg: trades.length ? (cash - cap0) / trades.length : 0, buyHold: (D.c[n - 1] / D.c[0] - 1) * 100,
@@ -3302,6 +3307,9 @@ window.App = window.App || {};
       if (def.need) { App.toast(def.name + ': ' + def.need, 'err', 6000); return; }
       const uid = Date.now() + Math.floor(Math.random() * 1000);
       C.inds.push({ uid, id, I: I || {}, st: {} });
+      // chiến lược có danh sách chỉ báo đi kèm (def.kem = [[id, inputs], ...]) → thêm luôn để thấy các điều kiện vào lệnh
+      (def.kem || []).forEach(([id2, I2, st2], q) => { if (!App.INDICATORS[id2] || C.inds.some(x => x.id === id2 && JSON.stringify(x.I) === JSON.stringify(I2))) return;
+        C.inds.push({ uid: uid + 1 + q, id: id2, I: I2, st: st2 || {} }); });
       C.saveInds(); C.renderIndicators();
       App.toast('Đã thêm ' + def.name, 'ok');
       return uid;
