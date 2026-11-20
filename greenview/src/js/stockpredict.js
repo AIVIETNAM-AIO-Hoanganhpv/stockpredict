@@ -416,6 +416,16 @@
       avg: trades.length ? (cash - cap0) / trades.length : 0, buyHold: (D.c[n - 1] / D.c[0] - 1) * 100, note: R.note } };
   }
 
+
+  // vẽ từng lệnh: đường nối điểm vào → điểm ra (xanh = lãi, đỏ = lỗ) + nhãn % ở điểm ra
+  function veLenh(g, X, D, trades) {
+    trades.forEach(t => { const x1 = X.x(t.ei), x2 = X.x(t.xi); if (x1 == null || x2 == null) return;
+      const lai = t.pct >= 0, mau = lai ? '#089981' : '#f23645', y1 = X.y(t.ep), y2 = X.y(t.xp);
+      g.fillStyle = lai ? 'rgba(8,153,129,0.10)' : 'rgba(242,54,69,0.10)'; g.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.max(2, Math.abs(x2 - x1)), Math.max(2, Math.abs(y2 - y1)));
+      X.seg(g, x1, y1, x2, y2, mau, [], 2);
+      X.label(g, x2, y2 + (t.side === 'Mua' ? (lai ? -14 : 14) : (lai ? 14 : -14)), (t.side === 'Mua' ? '' : 'S ') + App.fmtPct(t.pct) + (t.why === 'Đang mở' ? ' (mở)' : ''), mau); });
+  }
+
   // đáy gần nhất đã xác nhận (pivot k nến mỗi bên) thấp hơn giá; không có → đáy thấp nhất 10 nến
   function dayGanNhat(D, j, k = 3, xa = 60) {
     for (let i = j - k; i > Math.max(k - 1, j - xa); i--) {
@@ -729,8 +739,8 @@
       const bo = []; let truoc = -99;
       boQua.forEach(b => { if (b.i - truoc > 10) { bo.push(b); truoc = b.i; } });
       r.markers = r.markers.concat(bo.map(b => ({ i: b.i, pos: 'belowBar', shape: 'circle', color: '#9598a1', text: b.ly })));
-      r.draw = (g, X) => veTp.forEach(v => { const x1 = X.x(v.i), x2 = X.x(v.j != null ? v.j : D.n - 1); if (x1 == null || x2 == null) return;
-        X.seg(g, x1, X.y(v.tp), x2, X.y(v.tp), '#089981', [5, 4], 1.5); X.label(g, x1 + 60, X.y(v.tp) - 9, 'Fibo 1,0 ' + App.fmtPrice(v.tp), '#089981'); });
+      r.draw = (g, X) => { veLenh(g, X, D, r.backtest.trades); veTp.forEach(v => { const x1 = X.x(v.i), x2 = X.x(v.j != null ? v.j : D.n - 1); if (x1 == null || x2 == null) return;
+        X.seg(g, x1, X.y(v.tp), x2, X.y(v.tp), '#089981', [5, 4], 1.5); X.label(g, x1 + 60, X.y(v.tp) - 9, 'Fibo 1,0 ' + App.fmtPrice(v.tp), '#089981'); }); };
       return r;
     }
   };
@@ -834,7 +844,7 @@
       }
       hn.dong = [dong1(1, L), dong1(-1, Sh)];
       hn.gon = hn.dong.map(t => t.replace('LONG ', 'L: ').replace('SHORT ', 'S: ').replace(/ · /g, ' ').replace('Tín hiệu', 'TH').replace('MA200', 'MA').replace('Ngày', 'N').replace('Tuần', 'T').replace('Tháng', 'Th'));
-      const veHomNay = (g, X) => { const w = Math.min(X.W - 20, 430), x0 = 10, y0 = X.H - 100;
+      const veHomNay = (g, X) => { veLenh(g, X, D, trades); const w = Math.min(X.W - 20, 430), x0 = 10, y0 = X.H - 100;
         g.fillStyle = 'rgba(19,23,34,0.88)'; g.fillRect(x0, y0, w, 92); g.fillStyle = hn.mau; g.fillRect(x0, y0, 4, 92);
         g.textAlign = 'left'; g.textBaseline = 'top'; g.font = 'bold 12px sans-serif'; g.fillStyle = hn.mau; g.fillText('HÔM NAY: ' + hn.tieuDe, x0 + 10, y0 + 6);
         g.font = '11px sans-serif'; g.fillStyle = '#d1d4dc'; g.fillText(hn.them, x0 + 10, y0 + 24);
