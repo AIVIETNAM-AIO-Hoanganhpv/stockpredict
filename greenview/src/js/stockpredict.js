@@ -519,10 +519,12 @@
    * Một khung "TĂNG" khi đủ ≥ 2 trong 3 điều kiện: đỉnh/đáy sau cao hơn đỉnh/đáy trước · MACD trên đường tín hiệu ·
    * Sto dài (13-13-5) %K trên %D. (MA 80% và Heikin Ashi chỉ để tham khảo.)
    * ====================================================================== */
-  function xuHuongTang(D, k) {
-    // mảng true/false: khung (D là nến của khung đó) đang TĂNG tại từng nến
+  function xuHuongTang(D, k, haiSto = false) {
+    // mảng true/false: khung (D là nến của khung đó) đang TĂNG tại từng nến.
+    // haiSto: điều kiện Sto cần CẢ Sto ngắn 8-5-3 và Sto dài 13-13-5 đều %K > %D (theo slide khoá học)
     const n = D.n, m = T.sub(T.ema(D.c, 12), T.ema(D.c, 26)), sg = T.ema(m, 9);
     const K = T.sma(T.stoch(D.c, D.h, D.l, 13), 13), Dd = T.sma(K, 5), up = new Array(n).fill(false);
+    const Kn = T.sma(T.stoch(D.c, D.h, D.l, 8), 5), Dn = T.sma(Kn, 3);
     let h1 = N, h2 = N, l1 = N, l2 = N;
     for (let i = 0; i < n; i++) {
       const p = i - k;                     // đỉnh/đáy chỉ được xác nhận sau k nến
@@ -533,7 +535,8 @@
         if (isL) { l2 = l1; l1 = D.l[p]; }
       }
       const caoDan = isN(h2) && isN(l2) && h1 > h2 && l1 > l2;
-      up[i] = (caoDan ? 1 : 0) + (m[i] > sg[i] ? 1 : 0) + (K[i] > Dd[i] ? 1 : 0) >= 2;   // đủ 2/3 điều kiện
+      const sto = K[i] > Dd[i] && (!haiSto || Kn[i] > Dn[i]);
+      up[i] = (caoDan ? 1 : 0) + (m[i] > sg[i] ? 1 : 0) + (sto ? 1 : 0) >= 2;   // đủ 2/3 điều kiện
     }
     return up;
   }
@@ -545,9 +548,9 @@
     for (let i = 0; i < D.n; i++) { while (w + 1 < B.n && B.t[w + 1] <= D.t[i]) w++; cuoi[w] = i; }
     return { B, cuoi };
   }
-  App.dongPha = function (D) {
-    const upD = xuHuongTang(D, 3), W = khungLonTuNgay(D, 'W'), M = khungLonTuNgay(D, 'M');
-    const upW = xuHuongTang(W.B, 2), upM = xuHuongTang(M.B, 2);
+  App.dongPha = function (D, haiSto = false) {
+    const upD = xuHuongTang(D, 3, haiSto), W = khungLonTuNgay(D, 'W'), M = khungLonTuNgay(D, 'M');
+    const upW = xuHuongTang(W.B, 2, haiSto), upM = xuHuongTang(M.B, 2, haiSto);
     // trạng thái tuần/tháng tại ngày i = nến tuần/tháng ĐÃ XONG gần nhất (nến cuối của dữ liệu coi như chưa xong)
     const theoNgay = (X, up) => { const out = new Array(D.n).fill(false); let j = -1;
       for (let i = 0; i < D.n; i++) { while (j + 1 < X.B.n - 1 && X.cuoi[j + 1] <= i) j++; out[i] = j >= 0 && X.cuoi[j] <= i ? up[j] : false; } return out; };
@@ -670,10 +673,11 @@
       ['lai', 'Lãi dự kiến Fibo tối thiểu (%, 0 = bỏ)', 0, 'float'], ['catMax', 'Cắt lỗ tối đa (%)', 15, 'float'],
       ['adx', 'ADX tuần tối thiểu (0 = tắt)', 25, 'float'], ['pha', 'Lọc pha thị trường VN (chỉ mua khi pha tốt, pha xấu bán hết)', true, 'bool'],
       ['vao', 'Tín hiệu vào (khung ngày)', '2MA hoặc MACD+Sto', 'sel', ['2MA hoặc MACD+Sto', '2MA', 'MACD+Sto']],
+      ['sto', 'Điều kiện Sto khi xét xu hướng', 'Sto dài 13-13-5', 'sel', ['Sto dài 13-13-5', 'Sto ngắn 8-5-3 + Sto dài 13-13-5']],
       ['phi', 'Phí mỗi chiều (%)', 0.15, 'float'], ['thue', 'Thuế khi bán (%)', 0.1, 'float']],
     calc(D, I) {
       if ((App.TF[App.state.tf] || 86400) !== 86400) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Chiến lược dài hạn: mở biểu đồ khung NGÀY (1N) – vào lệnh theo khung ngày', '#787b86'); } };
-      const P = App.dongPha(D), S = App.macdSto(D), c = D.c, ma = { 6: T.sma(c, 6), 10: T.sma(c, 10), 20: T.sma(c, 20) }, atr = T.atr(D, 14);
+      const P = App.dongPha(D, I.sto.startsWith('Sto ngắn')), S = App.macdSto(D), c = D.c, ma = { 6: T.sma(c, 6), 10: T.sma(c, 10), 20: T.sma(c, 20) }, atr = T.atr(D, 14);
       const hug = T.sma(c.map((x, i) => Math.abs(x - ma[10][i])), 20).map((x, i) => x / atr[i]);
       const cap = i => hug[i] <= 0.874 ? [10, 20] : [6, 10];
       const tren = (i, cp) => ma[cp[0]][i] > ma[cp[1]][i];
@@ -754,6 +758,8 @@
     kem: [['ma', { len: 5 }, { m: { c: '#f7c948' } }], ['ma', { len: 10 }, { m: { c: '#2962ff' } }], ['ma', { len: 200 }, { m: { c: '#ffffff', w: 2 } }], ['macd', {}], ['stoch', { k: 8, sk: 5, d: 3 }], ['stoch', { k: 13, sk: 13, d: 5 }], ['dmi', {}]],
     inputs: [['huong', 'Hướng', 'Long và Short', 'sel', ['Long và Short', 'Chỉ Long', 'Chỉ Short']],
       ['dp', 'Đồng pha', '3 khung', 'sel', ['3 khung', '2 khung (bỏ khung lớn nhất)']],
+      ['sto', 'Điều kiện Sto khi xét xu hướng', 'Sto dài 13-13-5', 'sel', ['Sto dài 13-13-5', 'Sto ngắn 8-5-3 + Sto dài 13-13-5']],
+      ['vao', 'Tín hiệu vào', 'MACD+Sto hoặc MA5/10', 'sel', ['MACD+Sto hoặc MA5/10', 'MACD+Sto (theo slide)']],
       ['adx', 'ADX khung lớn kế tiếp tối thiểu (0 = tắt)', 25, 'float'],
       ['loc', 'Lọc xu hướng chung', 'MA200 ngày của chính mã', 'sel', ['MA200 ngày của chính mã', 'Tắt']],
       ['rr', 'Chốt lời cố định (R, 0 = không)', 0, 'float'], ['rui', 'Rủi ro mỗi lệnh (% vốn)', 1, 'float'], ['phi', 'Phí + spread mỗi chiều (%)', 0.03, 'float']],
@@ -762,13 +768,13 @@
       if (k0 < 0 || k0 > 4) return { draw(g, X) { X.label(g, X.W / 2, 22, 'Long/Short: chọn khung 15p, 1g, 4g, 1N hoặc 1T', '#787b86'); } };
       const lon = THANG_KHUNG.slice(k0 + 1, k0 + 3).map(b => khungLon(D, b)), Dn = daoDau(D);
       const ben = Q => {   // các mảng cho 1 phía (Q = giá thật → Long, giá đảo dấu → Short)
-        const up = xuHuongTang(Q, 3), S = App.macdSto(Q), m5 = T.sma(Q.c, 5), m10 = T.sma(Q.c, 10);
+        const hai = I.sto.startsWith('Sto ngắn'), up = xuHuongTang(Q, 3, hai), S = App.macdSto(Q), m5 = T.sma(Q.c, 5), m10 = T.sma(Q.c, 10);
         const lonQ = lon.map(X => ({ cuoi: X.cuoi, B: Q === D ? X.B : daoDau(X.B) }));
-        const upLon = lonQ.map(X => theoNen(D, X, xuHuongTang(X.B, 2)));
+        const upLon = lonQ.map(X => theoNen(D, X, xuHuongTang(X.B, 2, hai)));
         const ban = suKien(D, lonQ[0], App.macdSto(lonQ[0].B).Ban);
         const cat = j => { let ok = false; for (let x = Math.max(1, j - 2); x <= j; x++) { let deu = true; for (let q = x; q <= j; q++) if (!(m5[q] > m10[q])) deu = false; if (deu && !(m5[x - 1] > m10[x - 1])) ok = true; }
           return ok && Q.c[j] > m5[j] && Q.c[j] > m10[j]; };
-        const dung = I.dp.startsWith('2') ? upLon.slice(0, 1) : upLon, tin = j => Q.c[j] > Q.o[j] && (S.Mua1[j] || S.Mua2[j] || cat(j));
+        const dung = I.dp.startsWith('2') ? upLon.slice(0, 1) : upLon, tin = j => Q.c[j] > Q.o[j] && (S.Mua1[j] || S.Mua2[j] || (!I.vao.startsWith('MACD+Sto (') && cat(j)));
         return { Q, up, upLon: dung, tin, vao: j => up[j] && dung.every(u => u[j] === true) && tin(j), ban };
       };
       const L = ben(D), Sh = ben(Dn), atr = T.atr(D, 14);
