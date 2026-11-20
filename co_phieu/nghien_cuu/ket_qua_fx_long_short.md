@@ -101,3 +101,45 @@ charging 2 %/yr (forex), 4 %/yr (gold), 20 %/yr (crypto CFD) of notional lowers 
    risk 126 USD; mirrored (buy-type) MACD+Sto signal on W → covered at the open of 2026-03-02 at 0.273957 → +251 USD = +2.00 R.
 3. **Stop** – XAUUSD 4H SHORT: signal bar 2026-07-01 04:00 (bearish, 2MA cross-down, 4H/D/W down, ADX(D) 38), sold at the
    08:00 open 3988.8, stop 4078.1, lot 0.01; the 12:00 bar's high 4131 hit the stop → −89 USD = −1.00 R.
+
+## Added 2026-11-20: variants for more trades ("2 khung", regime off, "MA200 chính mã")
+
+Code `variants.py`, `varreport.py`; full table (TEST + FULL, every TF × class × variant) in `tables_variants.md`, Excel sheet
+`Bien_the_them_lenh`. Same split, sizing, costs, ADX(TF+1) ≥ 25 + DI, no TP, 200 random-entry runs per cell.
+- **2 khung** = đồng pha only on X and TF+1 (TF+2 dropped). The trading span still starts where TF+2 is available, so TRAIN/TEST dates are identical.
+  For W, 2 khung = 3 khung (W already uses only W + M).
+- **MA200 chính mã** (GreenView's regime option) = the symbol's own last completed daily close vs its SMA200 (trade TF W: weekly close vs 40-week SMA);
+  above → longs only, below → shorts only, flip → exit at the next open.
+- **15m excluded**: 2–3 months of data, TEST ≈ 4 weeks, too short to mean anything.
+
+**TEST final equity (from 10,000) / trades per year / random percentile**
+
+| TF | class | 3k · BTC/DXY (headline) | 3k · off | 3k · MA200 own | 2k · BTC/DXY | 2k · off | 2k · MA200 own |
+|---|---|---|---|---|---|---|---|
+| 1H | forex | 9,530 / 82 / 36% | 8,988 / 117 / 44% | 9,597 / 65 / 55% | 10,398 / 117 / 44% | 10,712 / 188 / 60% | 11,867 / 90 / 84% |
+| 1H | gold | 10,205 / 10 / 60% | 9,898 / 16 / 48% | 9,775 / 9 / 50% | 9,828 / 18 / 34% | 9,444 / 29 / 34% | 9,361 / 17 / 22% |
+| 1H | crypto | 10,120 / 78 / 0% | 10,809 / 169 / 20% | 9,143 / 101 / 0% | 11,054 / 126 / 32% | 11,100 / 242 / 42% | 10,098 / 148 / 16% |
+| 4H | forex | 8,690 / 34 / 31% | 8,815 / 40 / 68% | 8,613 / 34 / 52% | 8,189 / 43 / 7% | 8,609 / 51 / 38% | 8,570 / 39 / 43% |
+| 4H | gold | 9,836 / 2 | 9,782 / 3 | 9,782 / 3 | 9,836 / 2 | 9,708 / 4 | 9,782 / 3 |
+| 4H | crypto | 8,641 / 20 / 68% | 8,428 / 24 / 82% | 8,730 / 19 / 72% | 9,744 / 38 / 88% | 9,905 / 52 / 78% | 10,046 / 41 / 81% |
+| D | forex | 9,443 / 2.1 / 10% | 9,779 / 2.3 / 26% | 9,963 / 2.3 / 27% | 9,395 / 2.9 / 13% | 9,443 / 3.2 / 38% | 9,581 / 3.3 / 31% |
+| D | gold | 9,712 / 0.8 | 9,712 / 1.0 | 9,712 / 1.0 | 9,712 / 0.8 | 11,043 / 1.0 / 87% | 11,043 / 1.0 / 85% |
+| D | crypto | 11,428 / 7.4 / 50% | 11,436 / 7.4 / 50% | 11,436 / 7.4 / 50% | 11,763 / 10.8 / 42% | 11,434 / 11.4 / 38% | 11,706 / 11.1 / 41% |
+| W | forex | 9,722 / 0.7 | 9,604 / 0.7 | 9,697 / 0.6 | = 3k | = 3k | = 3k |
+| W | crypto | 9,843 / 3.7 / 80% | 9,959 / 2.8 / 20% | 9,796 / 3.7 / 78% | = 3k | = 3k | = 3k |
+
+(W gold: 0 TEST trades in every variant. 1H/4H "/yr" is high only because those TEST periods are ~1 year or less.)
+
+**What the variants change**
+* **More trades, but only modestly:** going from 3 to 2 timeframes adds about 30–60 % more trades. Turning the regime off adds another
+  30–80 % on 1H/4H and almost nothing on D/W. Summed over all TEST cells: headline 133 long / 159 short trades; 2 khung + BTC/DXY 187 / 235;
+  2 khung + regime off 303 / 326; 2 khung + MA200 own 185 / 228. D forex stays at about 3 trades/yr for 7 pairs; W at about 0.7/yr.
+* **No variant gives an edge.** On TEST, the best random percentile in any cell is 88 % (4H crypto, 2 khung + BTC/DXY, and it still lost money: 9,744).
+  The best-looking cell, 1H forex 2 khung + MA200 own (+18.7 % on TEST, 84th percentile), lost −5.7 % over the FULL 2.8 years
+  (max DD −32 %). It beat 98 % of random runs only because random entries lost even more.
+* **Shorts:** more shorts but still not profitable. FULL avg R of shorts: 1H crypto −0.08…−0.47 R, 1H forex −0.11…+0.14 R. They are
+  positive on 4H crypto (+0.6…+1.1 R, 25–68 trades, about 2 years) and D forex (+0.1…+0.3 R, about 2 trades/yr). On 4H crypto, longs lost
+  at the same time (−0.14…−0.33 R), so this looks like the 2025–26 crypto downtrend, not a reliable short signal.
+* **MA200 chính mã vs BTC/DXY regime:** no systematic difference. On D crypto/forex it hardly differs from regime off, because
+  đồng pha D/W/M up almost always means price is above its MA200 anyway.
+* The verdict above stands: none of these variants should be traded with real money on this evidence.
