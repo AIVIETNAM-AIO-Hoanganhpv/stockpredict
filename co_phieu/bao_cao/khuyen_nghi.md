@@ -1,4 +1,4 @@
-# Khuyến nghị toàn thị trường – 24/11/2026 04:39
+# Khuyến nghị toàn thị trường – 25/11/2026 03:21
 
 Quét 1517 mã · phân tích 269 mã đủ thanh khoản · 24 mã xu hướng tăng, 118 mã giảm.
 
